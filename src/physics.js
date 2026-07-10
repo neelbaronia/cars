@@ -1,0 +1,346 @@
+export const GRAVITY = 9.81
+export const AIR_DENSITY = 1.225
+export const IDLE_RPM = 850
+export const REDLINE_RPM = 6800
+
+export const GEAR_RATIOS = Object.freeze({
+  reverse: -3.54,
+  neutral: 0,
+  1: 3.55,
+  2: 2.19,
+  3: 1.52,
+  4: 1.16,
+  5: 0.93,
+  6: 0.76,
+})
+
+export const FINAL_DRIVE_RATIO = 3.9
+
+const MAX_ENGINE_RPM = 7200
+const STRAIGHT_LINE_RADIUS = 1_000_000_000
+const STOP_SPEED = 0.05
+
+// Net brake torque for a representative naturally aspirated gasoline engine.
+// The broad middle and gentle falloff are characteristic of an everyday 2–3 L
+// engine, rather than a turbocharged engine's flat torque plateau.
+const FULL_THROTTLE_TORQUE_CURVE = [
+  [0, 0],
+  [400, 70],
+  [IDLE_RPM, 145],
+  [1200, 175],
+  [2000, 210],
+  [3000, 238],
+  [4200, 260],
+  [5200, 252],
+  [6200, 220],
+  [REDLINE_RPM, 165],
+  [MAX_ENGINE_RPM, 0],
+]
+
+export const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
+
+const finiteNumber = (value, fallback = 0) => (
+  Number.isFinite(Number(value)) ? Number(value) : fallback
+)
+
+function interpolateCurve(curve, value) {
+  if (value <= curve[0][0]) return curve[0][1]
+
+  for (let index = 1; index < curve.length; index += 1) {
+    const [nextX, nextY] = curve[index]
+    const [previousX, previousY] = curve[index - 1]
+    if (value <= nextX) {
+      const progress = (value - previousX) / (nextX - previousX)
+      return previousY + (nextY - previousY) * progress
+    }
+  }
+
+  return curve[curve.length - 1][1]
+}
+
+/**
+ * Engine crankshaft torque in N·m.
+ *
+ * `throttle` is a 0–1 pedal position. At a closed pedal the idle controller
+ * adds just enough throttle to hold roughly 850 rpm. Above idle, pumping and
+ * friction losses make closed-throttle torque negative (engine braking).
+ */
+export function engineTorqueNm(rpm = IDLE_RPM, throttle = 0) {
+  const safeRpm = clamp(finiteNumber(rpm, IDLE_RPM), 0, MAX_ENGINE_RPM)
+  const pedal = clamp(finiteNumber(throttle), 0, 1)
+
+  if (safeRpm === 0) return 0
+
+  const fullThrottleTorque = interpolateCurve(FULL_THROTTLE_TORQUE_CURVE, safeRpm)
+  const overrunDragTorque = 9.5 + safeRpm * 0.0036
+
+  // At idle this fraction exactly balances drag. The proportional correction
+  // catches a falling idle, as an electronic idle-air controller would.
+  const holdingThrottle = overrunDragTorque
+    / Math.max(1, fullThrottleTorque + overrunDragTorque)
+  const idleCorrection = (IDLE_RPM - safeRpm) / 650
+  const idleThrottle = clamp(holdingThrottle + idleCorrection, 0, 0.55)
+  const effectiveThrottle = Math.max(pedal, idleThrottle)
+
+  const netTorque = fullThrottleTorque * effectiveThrottle
+    - overrunDragTorque * (1 - effectiveThrottle)
+
+  // A stopped engine cannot make crankshaft torque. This fade also keeps the
+  // simplified idle controller well behaved while a starter is cranking it.
+  const crankingFactor = clamp(safeRpm / 400, 0, 1)
+  return netTorque * crankingFactor
+}
+
+/**
+ * A compact engine-energy model. Power is signed: negative power represents
+ * the engine absorbing energy during closed-throttle overrun.
+ */
+export function engineOutput({ rpm = IDLE_RPM, throttle = 0, spark = true } = {}) {
+  const safeRpm = clamp(finiteNumber(rpm, IDLE_RPM), 0, MAX_ENGINE_RPM)
+  const safeThrottle = clamp(finiteNumber(throttle), 0, 1)
+  const combustionTorqueNm = engineTorqueNm(safeRpm, safeThrottle)
+  const hasSpark = spark !== false
+  const torqueNm = hasSpark
+    ? combustionTorqueNm
+    : safeRpm < 200 ? 0 : -(9.5 + safeRpm * 0.0036)
+  const angularSpeed = safeRpm * (2 * Math.PI / 60)
+  const powerKw = torqueNm * angularSpeed / 1000
+
+  // Gasoline engines are most efficient at moderate-to-high load near the
+  // middle of the rev range. 34% is plausible for a modern spark-ignition car.
+  const rpmBand = Math.exp(-(((safeRpm - 3600) / 3000) ** 2))
+  const loadBand = 0.25 + 0.75 * Math.sqrt(safeThrottle)
+  const combustionEfficiency = clamp(0.1 + 0.24 * rpmBand * loadBand, 0.08, 0.34)
+  const efficiency = hasSpark ? combustionEfficiency : 0
+
+  let fuelRateGps
+  if (safeRpm < 200) {
+    fuelRateGps = 0
+  } else if (safeThrottle < 0.015 && safeRpm > 1500 && torqueNm < 0) {
+    // Modern engines nearly stop injecting fuel while the wheels back-drive
+    // the engine. A tiny non-zero value avoids a brittle discontinuity in UI.
+    fuelRateGps = 0.015
+  } else {
+    const idleAndAccessoryFuel = 0.16 + Math.max(0, safeRpm - IDLE_RPM) * 0.000008
+    // Gasoline lower heating value ≈ 44 MJ/kg. With kW and g/s, division by
+    // (44 * efficiency) performs the required unit conversion directly.
+    const potentialPowerKw = Math.max(0, combustionTorqueNm * angularSpeed / 1000)
+    const loadFuel = potentialPowerKw / (44 * combustionEfficiency)
+    fuelRateGps = idleAndAccessoryFuel + loadFuel
+  }
+
+  return { torqueNm, powerKw, fuelRateGps, efficiency }
+}
+
+/** Accepts -1/"R"/"reverse", 0/"N"/"neutral", or gears 1 through 6. */
+export function getGearRatio(gear = 0) {
+  if (gear === -1) return GEAR_RATIOS.reverse
+  if (gear === 0) return GEAR_RATIOS.neutral
+
+  const key = String(gear).trim().toLowerCase()
+  if (key === 'r' || key === 'reverse' || key === '-1') return GEAR_RATIOS.reverse
+  if (key === 'n' || key === 'neutral' || key === '0') return GEAR_RATIOS.neutral
+  if (Object.hasOwn(GEAR_RATIOS, key)) return GEAR_RATIOS[key]
+  return GEAR_RATIOS.neutral
+}
+
+/**
+ * Longitudinal tire and road forces in SI units.
+ *
+ * `speed` is signed m/s and `roadGrade` is rise/run (0.05 means a 5% uphill
+ * grade in the car's forward direction). Drive forces are signed. The named
+ * resistance forces are positive magnitudes; `netForce` carries direction.
+ */
+export function drivetrainOutput({
+  engineTorque = 0,
+  gear = 0,
+  brake = 0,
+  speed = 0,
+  mass = 1450,
+  wheelRadius = 0.31,
+  roadGrade = 0,
+} = {}) {
+  const safeEngineTorque = clamp(finiteNumber(engineTorque), -1000, 1000)
+  const safeBrake = clamp(finiteNumber(brake), 0, 1)
+  const safeSpeed = clamp(finiteNumber(speed), -120, 120)
+  const safeMass = clamp(finiteNumber(mass, 1450), 250, 50_000)
+  const safeWheelRadius = clamp(finiteNumber(wheelRadius, 0.31), 0.1, 1.5)
+  const safeGrade = clamp(finiteNumber(roadGrade), -0.5, 0.5)
+
+  const gearRatio = getGearRatio(gear)
+  const finalDrive = FINAL_DRIVE_RATIO
+  const drivetrainEfficiency = 0.9
+  const wheelTorque = safeEngineTorque * gearRatio * finalDrive * drivetrainEfficiency
+  const driveForce = wheelTorque / safeWheelRadius
+
+  const gradeAngle = Math.atan(safeGrade)
+  const normalForce = safeMass * GRAVITY * Math.cos(gradeAngle)
+  const tireFrictionLimit = 0.9 * normalForce
+  // The teaching sedan is rear-wheel drive. In a straight, steady condition,
+  // roughly 55% of its normal load is available at the driven rear axle.
+  const tractionLimit = 0.55 * tireFrictionLimit
+  const tractionLimitedForce = clamp(driveForce, -tractionLimit, tractionLimit)
+
+  const roadGradeForce = -safeMass * GRAVITY * Math.sin(gradeAngle)
+  const forceBeforeResistance = tractionLimitedForce + roadGradeForce
+  const movementDirection = Math.abs(safeSpeed) > STOP_SPEED
+    ? Math.sign(safeSpeed)
+    : Math.sign(forceBeforeResistance)
+
+  const brakeCapacity = safeBrake * tireFrictionLimit
+  const aerodynamicCapacity = 0.5 * AIR_DENSITY * 0.64 * safeSpeed ** 2
+  const rollingCapacity = 0.012 * normalForce
+
+  let brakeForce = movementDirection === 0 ? 0 : brakeCapacity
+  const aeroDrag = movementDirection === 0 ? 0 : aerodynamicCapacity
+  let rollingResistance = movementDirection === 0 ? 0 : rollingCapacity
+
+  if (Math.abs(safeSpeed) <= STOP_SPEED && movementDirection !== 0) {
+    // At rest, brakes and tire deformation can cancel a tendency to move, but
+    // cannot create motion in the opposite direction by themselves.
+    let remainingForce = Math.abs(forceBeforeResistance)
+    brakeForce = Math.min(brakeForce, remainingForce)
+    remainingForce -= brakeForce
+    rollingResistance = Math.min(rollingResistance, remainingForce)
+  }
+
+  const resistanceForce = movementDirection * (brakeForce + aeroDrag + rollingResistance)
+  const netForce = forceBeforeResistance - resistanceForce
+  const acceleration = netForce / safeMass
+
+  return {
+    gearRatio,
+    finalDrive,
+    wheelTorque,
+    driveForce,
+    brakeForce,
+    aeroDrag,
+    rollingResistance,
+    roadGradeForce,
+    tireFrictionLimit,
+    tractionLimit,
+    tractionLimitedForce,
+    netForce,
+    acceleration,
+  }
+}
+
+/**
+ * Kinematic bicycle steering model. Turn radius is signed in meters and yaw
+ * rate is signed radians/s. Straight ahead uses a large finite radius so every
+ * simulator output remains JSON- and chart-friendly.
+ */
+export function steeringOutput({ speed = 0, steeringDeg = 0, wheelbase = 2.7 } = {}) {
+  const safeSpeed = clamp(finiteNumber(speed), -120, 120)
+  const safeSteeringDeg = clamp(finiteNumber(steeringDeg), -40, 40)
+  const safeWheelbase = clamp(finiteNumber(wheelbase, 2.7), 1, 10)
+  const steeringRadians = safeSteeringDeg * Math.PI / 180
+
+  if (Math.abs(steeringRadians) < 1e-7) {
+    return { turnRadius: STRAIGHT_LINE_RADIUS, yawRate: 0 }
+  }
+
+  const turnRadius = safeWheelbase / Math.tan(steeringRadians)
+  const yawRate = safeSpeed / turnRadius
+  return { turnRadius, yawRate }
+}
+
+const normalizeAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle))
+
+/**
+ * Advance the simplified vehicle by `dt` seconds. State uses meters, seconds,
+ * radians, and rpm; heading 0 points along +z. Controls accept throttle/gas,
+ * brake/brakes, steeringDeg/steering, gear, and roadGrade.
+ */
+export function stepVehicle(state = {}, controls = {}, dt = 1 / 60) {
+  const safeState = state && typeof state === 'object' ? state : {}
+  const safeControls = controls && typeof controls === 'object' ? controls : {}
+  const timeStep = clamp(finiteNumber(dt), 0, 0.25)
+
+  const speed = clamp(finiteNumber(safeState.speed), -120, 120)
+  const previousRpm = clamp(finiteNumber(safeState.rpm, IDLE_RPM), 0, MAX_ENGINE_RPM)
+  const previousHeading = normalizeAngle(finiteNumber(safeState.heading))
+  const previousX = finiteNumber(safeState.x)
+  const previousZ = finiteNumber(safeState.z)
+  const mass = clamp(finiteNumber(safeState.mass, 1450), 250, 50_000)
+  const wheelRadius = clamp(finiteNumber(safeState.wheelRadius, 0.31), 0.1, 1.5)
+  const wheelbase = clamp(finiteNumber(safeState.wheelbase, 2.7), 1, 10)
+
+  const throttle = clamp(finiteNumber(safeControls.throttle ?? safeControls.gas), 0, 1)
+  const brake = clamp(finiteNumber(safeControls.brake ?? safeControls.brakes), 0, 1)
+  const steeringDeg = clamp(
+    finiteNumber(safeControls.steeringDeg ?? safeControls.steering),
+    -40,
+    40,
+  )
+  const gear = safeControls.gear ?? safeState.gear ?? 1
+  const roadGrade = clamp(
+    finiteNumber(safeControls.roadGrade ?? safeState.roadGrade),
+    -0.5,
+    0.5,
+  )
+
+  const gearRatio = getGearRatio(gear)
+  const wheelRpm = Math.abs(speed) / (2 * Math.PI * wheelRadius) * 60
+  const coupledRpm = Math.max(IDLE_RPM, wheelRpm * Math.abs(gearRatio) * FINAL_DRIVE_RATIO)
+  const launchSlip = IDLE_RPM
+    + throttle * 1200 * clamp(1 - Math.abs(speed) / 8, 0, 1)
+  const freeRevRpm = IDLE_RPM + throttle * (REDLINE_RPM - IDLE_RPM)
+  const targetRpm = gearRatio === 0
+    ? freeRevRpm
+    : Math.max(coupledRpm, launchSlip)
+  const rpmResponse = gearRatio === 0
+    ? (targetRpm > previousRpm ? 3.8 : 2.2)
+    : 10
+  const rpmBlend = 1 - Math.exp(-rpmResponse * timeStep)
+  const rpm = clamp(
+    previousRpm + (clamp(targetRpm, 0, MAX_ENGINE_RPM) - previousRpm) * rpmBlend,
+    0,
+    MAX_ENGINE_RPM,
+  )
+
+  const engine = engineOutput({ rpm, throttle })
+  const drivetrain = drivetrainOutput({
+    engineTorque: engine.torqueNm,
+    gear,
+    brake,
+    speed,
+    mass,
+    wheelRadius,
+    roadGrade,
+  })
+
+  let nextSpeed = clamp(speed + drivetrain.acceleration * timeStep, -120, 120)
+  const poweredDriveDirection = engine.torqueNm > 0 ? Math.sign(gearRatio) : 0
+  const canDriveBackward = poweredDriveDirection < 0 || drivetrain.roadGradeForce < 0
+  const canDriveForward = poweredDriveDirection > 0 || drivetrain.roadGradeForce > 0
+  // Resistive forces can bring the car to rest, but cannot push it through zero.
+  // Crossing is allowed only when the selected gear or gravity pulls that way.
+  if (speed > 0 && nextSpeed < 0 && !canDriveBackward) nextSpeed = 0
+  if (speed < 0 && nextSpeed > 0 && !canDriveForward) nextSpeed = 0
+
+  const averageSpeed = (speed + nextSpeed) / 2
+  const steering = steeringOutput({ speed: averageSpeed, steeringDeg, wheelbase })
+  const heading = normalizeAngle(previousHeading + steering.yawRate * timeStep)
+  const midpointHeading = normalizeAngle(
+    previousHeading + steering.yawRate * timeStep * 0.5,
+  )
+  const distance = averageSpeed * timeStep
+  const x = previousX + Math.sin(midpointHeading) * distance
+  const z = previousZ + Math.cos(midpointHeading) * distance
+
+  const outputs = { engine, drivetrain, steering }
+  return {
+    ...safeState,
+    speed: nextSpeed,
+    rpm,
+    heading,
+    x,
+    z,
+    gear,
+    engine,
+    drivetrain,
+    steering,
+    outputs,
+  }
+}
