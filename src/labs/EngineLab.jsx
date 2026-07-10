@@ -34,14 +34,15 @@ export default function EngineLab() {
   const [rpm, setRpm] = useState(2200)
   const [spark, setSpark] = useState(true)
   const [mode, setMode] = useState('path')
+  const [playbackRate, setPlaybackRate] = useState(0.65)
 
   useEffect(() => {
     if (!running) return undefined
     const timer = window.setInterval(() => {
-      setProgress((current) => (current + 0.035 + rpm / 50000) % 4)
+      setProgress((current) => (current + 0.02 * playbackRate) % 4)
     }, 50)
     return () => window.clearInterval(timer)
-  }, [rpm, running])
+  }, [playbackRate, running])
 
   const strokeIndex = Math.floor(progress) % 4
   const stroke = STROKES[strokeIndex]
@@ -59,7 +60,7 @@ export default function EngineLab() {
   const fuelPerCycleMg = output.fuelRateGps > 0 ? (output.fuelRateGps / Math.max(1, rpm / 120 * 4)) * 1000 : 0
   const useful = output.powerKw > 0 ? Math.round(output.efficiency * 100) : 0
 
-  const reset = () => { setProgress(0.12); setRunning(true); setThrottle(38); setRpm(2200); setSpark(true); setMode('path') }
+  const reset = () => { setProgress(0.12); setRunning(true); setThrottle(38); setRpm(2200); setSpark(true); setMode('path'); setPlaybackRate(0.65) }
   const chooseStroke = (index) => { setProgress(index + 0.12); setRunning(false); setMode('cycle') }
 
   return (
@@ -93,6 +94,12 @@ export default function EngineLab() {
           <button className="play-button" type="button" onClick={() => setRunning((value) => !value)}>
             {running ? <Pause size={15} /> : <Play size={15} />}{running ? 'Pause cycle' : 'Play cycle'}
           </button>
+          <div className="playback-control">
+            <span>Slow-motion playback</span>
+            <Segmented label="Cycle playback speed" value={playbackRate} onChange={setPlaybackRate} options={[
+              { value: 0.65, label: 'Slow' }, { value: 1, label: 'Study' }, { value: 1.6, label: 'Faster' },
+            ]} />
+          </div>
           <Slider label="Crank angle" value={crankAngle} min={0} max={719} unit="°" onChange={(value) => { setProgress(value / 180); setRunning(false); setMode('cycle') }} accent="#76569b" />
           <Slider label="Accelerator request" value={throttle} min={0} max={100} unit="%" onChange={setThrottle} />
           <Slider label="Engine speed" value={rpm} min={800} max={6000} step={100} unit=" rpm" onChange={setRpm} accent="#28778c" />

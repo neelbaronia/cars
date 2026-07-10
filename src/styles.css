@@ -133,6 +133,10 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .engine-diagram svg { width: 100%; height: 100%; display: block; }
 .diagram-car-outline { fill: rgba(239,167,187,.13); stroke: #b47070; stroke-width: 3; stroke-dasharray: 10 8; }
 .diagram-orientation { fill: #796f68; font: 500 12px 'DM Mono', monospace; letter-spacing: .08em; }
+.diagram-material-key text { fill: #5f7174; font: 600 10px 'DM Mono', monospace; }
+.diagram-material-key .is-fuel { fill: #ffd957; stroke: #9b741b; stroke-width: 1.5; }
+.diagram-material-key .is-air { fill: #d7f1ef; stroke: #28778c; stroke-width: 1.5; }
+.diagram-material-key .is-burn { fill: #e6543f; stroke: #a9443a; stroke-width: 1.5; }
 .diagram-paths { opacity: 1; transition: opacity .3s ease; }
 .diagram-paths.is-muted, .engine-diagram--energy .diagram-paths { opacity: .24; }
 .diagram-pipe { fill: none; stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 14 10; }
@@ -141,6 +145,10 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .diagram-pipe--fuel { stroke: #e1aa25; }
 .diagram-pipe--exhaust { stroke: #b97d45; }
 @keyframes diagram-flow { to { stroke-dashoffset: -24; } }
+.diagram-fuel-droplet { fill: #ffd957; stroke: #9b741b; stroke-width: 2.5; filter: drop-shadow(0 0 4px rgba(242,195,72,.75)); }
+.diagram-fuel-spray path { fill: none; stroke: #f2c348; stroke-width: 3; stroke-dasharray: 4 5; }
+.diagram-fuel-spray circle { fill: #ffd957; stroke: #9b741b; stroke-width: 1.4; }
+.diagram-fuel-spray text { fill: #8b6515; font: 600 10px 'DM Mono', monospace; }
 .diagram-label rect { fill: #fff8e9; stroke: #9f8e80; stroke-width: 1.5; }
 .diagram-label text { fill: #315964; font: 600 12px 'DM Mono', monospace; }
 .diagram-label--air rect { stroke: #3f9a9d; }
@@ -155,6 +163,12 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .diagram-injector { fill: #f2c348; stroke: #8e613a; stroke-width: 2; }
 .diagram-cylinder { fill: rgba(255,250,241,.62); stroke: #75483f; stroke-width: 5; }
 .diagram-pressure { fill: #fff8e9; paint-order: stroke; stroke: rgba(48,78,84,.65); stroke-width: 5; font: 500 14px 'DM Mono', monospace; }
+.diagram-mixture-dot { opacity: .9; }
+.diagram-mixture-dot--air { fill: #d7f1ef; stroke: #28778c; stroke-width: 1.3; }
+.diagram-mixture-dot--fuel { fill: #ffd957; stroke: #9b741b; stroke-width: 1.5; }
+.diagram-combustion-front { stroke: #f2c348; stroke-width: 3; filter: drop-shadow(0 0 9px rgba(230,84,63,.65)); }
+.diagram-flame-core { fill: #fff2a6; stroke: #e6543f; stroke-width: 3; }
+.diagram-combustion-label { fill: #a9443a; font: 700 11px 'DM Mono', monospace; letter-spacing: .02em; }
 .diagram-valve line { stroke: #3f9a9d; stroke-width: 9; stroke-linecap: round; }
 .diagram-valve path { fill: #3f9a9d; stroke: #286e72; stroke-width: 2; }
 .diagram-valve--exhaust line { stroke: #d38d27; }
@@ -350,6 +364,9 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
 .stroke-picker button span { font-size: .6rem; font-weight: 700; }
 .stroke-picker button.is-active { border-color: #347d80; background: #3f8f91; color: white; }
 .play-button { height: 34px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 3px; background: #315964; color: white; cursor: pointer; font-size: .69rem; font-weight: 700; }
+.playback-control { display: grid; gap: 8px; }
+.playback-control > span { color: #354e53; font-size: .72rem; font-weight: 600; }
+.playback-control .segmented button { min-height: 29px; padding-block: 3px; }
 .switch-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; cursor: pointer; }
 .switch-row > span { display: grid; gap: 2px; }
 .switch-row strong { font-size: .74rem; }
