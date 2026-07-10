@@ -131,7 +131,15 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 
 .engine-diagram { position: absolute; inset: 0; display: grid; place-items: center; padding: 64px 8px 58px; background: #f3e8d8; overflow: hidden; }
 .engine-diagram svg { width: 100%; height: 100%; display: block; }
-.diagram-car-outline { fill: rgba(239,167,187,.13); stroke: #b47070; stroke-width: 3; stroke-dasharray: 10 8; }
+.diagram-car-silhouette { opacity: .7; }
+.diagram-car-body { fill: rgba(239,167,187,.15); stroke: #a96568; stroke-width: 3.5; stroke-linejoin: round; }
+.diagram-car-window { fill: rgba(63,154,157,.1); stroke: #7a9b9b; stroke-width: 2; stroke-linejoin: round; }
+.diagram-car-detail { fill: none; stroke: #b47070; stroke-width: 2; stroke-dasharray: 8 7; }
+.diagram-car-tire { fill: #f3e8d8; stroke: #625b58; stroke-width: 10; }
+.diagram-car-rim { fill: rgba(63,154,157,.14); stroke: #8a817b; stroke-width: 3; }
+.diagram-car-hub { fill: #b47070; stroke: #f3e8d8; stroke-width: 2; }
+.diagram-car-headlight { fill: rgba(242,195,72,.68); stroke: #9b741b; stroke-width: 2; }
+.diagram-car-tail-light { fill: rgba(230,84,63,.68); stroke: #a9443a; stroke-width: 2; }
 .diagram-orientation { fill: #796f68; font: 500 12px 'DM Mono', monospace; letter-spacing: .08em; }
 .diagram-material-key text { fill: #5f7174; font: 600 10px 'DM Mono', monospace; }
 .diagram-material-key .is-fuel { fill: #ffd957; stroke: #9b741b; stroke-width: 1.5; }

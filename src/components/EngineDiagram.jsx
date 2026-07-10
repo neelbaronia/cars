@@ -65,9 +65,26 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
 
         <rect width="900" height="650" fill="#f3e8d8" />
         <rect width="900" height="650" fill="url(#paper-grid)" />
-        <path className="diagram-car-outline" d="M78 520h714l-22-165-100-36-87-136H260l-82 134-76 38z" />
-        <text className="diagram-orientation" x="86" y="552">FRONT OF CAR</text>
-        <text className="diagram-orientation" x="695" y="552">REAR OF CAR</text>
+        <g className="diagram-car-silhouette" aria-hidden="true">
+          <path className="diagram-car-body" d="M55 477 65 415Q70 376 107 365l223-53 80-132q16-29 45-29h115q32 2 51 27l69 138 90 21q38 8 52 44l14 50q7 26-15 42l-41 12q-5-52-52-78t-91 0q-35 22-39 78H282q-5-52-52-78t-91 0q-35 22-40 78H73q-21 0-18-8Z" />
+          <path className="diagram-car-window" d="M432 170h72v136H355l63-111q7-17 14-25Z" />
+          <path className="diagram-car-window" d="M520 170h46q22 2 35 25l57 111H520Z" />
+          <path className="diagram-car-detail" d="M505 170v136m15 17h144m-325 0H111m646 28 65 17M65 415l46-4" />
+          <g className="diagram-car-wheel" transform="translate(190 485)">
+            <circle r="52" className="diagram-car-tire" />
+            <circle r="27" className="diagram-car-rim" />
+            <circle r="7" className="diagram-car-hub" />
+          </g>
+          <g className="diagram-car-wheel" transform="translate(700 485)">
+            <circle r="52" className="diagram-car-tire" />
+            <circle r="27" className="diagram-car-rim" />
+            <circle r="7" className="diagram-car-hub" />
+          </g>
+          <path className="diagram-car-headlight" d="M70 392h22l-6 20H65" />
+          <path className="diagram-car-tail-light" d="M810 364h17l8 25-20-4Z" />
+        </g>
+        <text className="diagram-orientation" x="66" y="558">← FRONT / ENGINE BAY</text>
+        <text className="diagram-orientation" x="715" y="558">REAR →</text>
         <g className="diagram-material-key" transform="translate(610 145)">
           <circle cx="0" cy="0" r="6" className="is-fuel" /><text x="12" y="4">FUEL</text>
           <circle cx="72" cy="0" r="6" className="is-air" /><text x="84" y="4">AIR</text>
