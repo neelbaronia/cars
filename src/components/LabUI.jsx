@@ -1,4 +1,4 @@
-import { Gauge, Lightbulb, RotateCcw } from 'lucide-react'
+import { Gauge, Lightbulb, RefreshCw, RotateCcw } from 'lucide-react'
 
 export function Slider({ label, value, min, max, step = 1, unit = '', onChange, accent = '#e6543f', disabled = false }) {
   const progress = ((value - min) / (max - min)) * 100
@@ -98,6 +98,17 @@ export function ReadoutStrip({ items }) {
   return (
     <div className="hud-strip">
       {items.map(({ label, value }) => <span key={label}><small>{label}</small><b>{value}</b></span>)}
+    </div>
+  )
+}
+
+export function RenderFallback({ onRetry }) {
+  return (
+    <div className="render-fallback" role="alert">
+      <span className="render-fallback__wheel" aria-hidden="true" />
+      <strong>The 3D studio needs a quick restart.</strong>
+      <p>Your lesson controls and progress are safe.</p>
+      <button type="button" onClick={onRetry}><RefreshCw size={15} /> Retry 3D view</button>
     </div>
   )
 }

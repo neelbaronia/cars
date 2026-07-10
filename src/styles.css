@@ -129,6 +129,65 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .demo-pane--motion { background: #e4cbb5; }
 .demo-pane--simulator { background: #87cad8; }
 
+.engine-diagram { position: absolute; inset: 0; display: grid; place-items: center; padding: 64px 8px 58px; background: #f3e8d8; overflow: hidden; }
+.engine-diagram svg { width: 100%; height: 100%; display: block; }
+.diagram-car-outline { fill: rgba(239,167,187,.13); stroke: #b47070; stroke-width: 3; stroke-dasharray: 10 8; }
+.diagram-orientation { fill: #796f68; font: 500 12px 'DM Mono', monospace; letter-spacing: .08em; }
+.diagram-paths { opacity: 1; transition: opacity .3s ease; }
+.diagram-paths.is-muted, .engine-diagram--energy .diagram-paths { opacity: .24; }
+.diagram-pipe { fill: none; stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 14 10; }
+.diagram-pipe.is-flowing { animation: diagram-flow .65s linear infinite; }
+.diagram-pipe--air { stroke: #3f9a9d; }
+.diagram-pipe--fuel { stroke: #e1aa25; }
+.diagram-pipe--exhaust { stroke: #b97d45; }
+@keyframes diagram-flow { to { stroke-dashoffset: -24; } }
+.diagram-label rect { fill: #fff8e9; stroke: #9f8e80; stroke-width: 1.5; }
+.diagram-label text { fill: #315964; font: 600 12px 'DM Mono', monospace; }
+.diagram-label--air rect { stroke: #3f9a9d; }
+.diagram-label--air text { fill: #347d80; }
+.diagram-label--fuel rect { stroke: #c38f1c; }
+.diagram-label--fuel text { fill: #8b6515; }
+.diagram-label--exhaust rect { stroke: #b47b45; }
+.diagram-label--exhaust text { fill: #8a6632; }
+.diagram-small-label { fill: #5f7174; font: 500 10px 'DM Mono', monospace; letter-spacing: .03em; }
+.diagram-tank { fill: #f2c348; stroke: #8e613a; stroke-width: 3; }
+.diagram-pump { fill: #e6543f; stroke: #fff8e9; stroke-width: 4; }
+.diagram-injector { fill: #f2c348; stroke: #8e613a; stroke-width: 2; }
+.diagram-cylinder { fill: rgba(255,250,241,.62); stroke: #75483f; stroke-width: 5; }
+.diagram-pressure { fill: #fff8e9; paint-order: stroke; stroke: rgba(48,78,84,.65); stroke-width: 5; font: 500 14px 'DM Mono', monospace; }
+.diagram-valve line { stroke: #3f9a9d; stroke-width: 9; stroke-linecap: round; }
+.diagram-valve path { fill: #3f9a9d; stroke: #286e72; stroke-width: 2; }
+.diagram-valve--exhaust line { stroke: #d38d27; }
+.diagram-valve--exhaust path { fill: #d38d27; stroke: #8f6323; }
+.diagram-valve.is-open { filter: drop-shadow(0 4px 0 rgba(63,154,157,.22)); }
+.diagram-spark-plug { stroke: #fff8e9; stroke-width: 10; stroke-linecap: round; paint-order: stroke; filter: drop-shadow(0 0 2px #76569b); }
+.diagram-spark { fill: #fff176; stroke: #e6543f; stroke-width: 3; filter: drop-shadow(0 0 8px #f2c348); }
+.diagram-piston { fill: #f2c348; stroke: #8e573d; stroke-width: 4; filter: drop-shadow(5px 6px 0 rgba(118,86,155,.18)); }
+.diagram-rod { stroke: #76569b; stroke-width: 17; stroke-linecap: round; }
+.diagram-pin { fill: #fff8e9; stroke: #65468b; stroke-width: 6; }
+.diagram-crank { fill: rgba(118,86,155,.14); stroke: #76569b; stroke-width: 12; }
+.diagram-crank-arm { stroke: #76569b; stroke-width: 17; stroke-linecap: round; }
+.diagram-shaft { stroke: #65468b; stroke-width: 13; stroke-linecap: round; }
+.diagram-energy { opacity: 0; transition: opacity .25s ease; }
+.engine-diagram--energy .diagram-energy { opacity: 1; }
+.diagram-force { stroke: #e6543f; stroke-width: 8; stroke-linecap: round; }
+.diagram-force-label { fill: #a9443a; font: 600 11px 'DM Mono', monospace; }
+.diagram-torque { fill: none; stroke: #76569b; stroke-width: 8; stroke-linecap: round; }
+.diagram-torque-label { fill: #65468b; font: 600 13px 'DM Mono', monospace; }
+.diagram-heat path { fill: none; stroke: #e6543f; stroke-width: 7; stroke-linecap: round; }
+.diagram-cycle-key circle { fill: #b7aaa0; }
+.diagram-cycle-key text { fill: #687678; font: 500 11px 'DM Mono', monospace; }
+.diagram-cycle-key .is-active circle { fill: #e6543f; filter: drop-shadow(2px 2px 0 #efa7bb); }
+.diagram-cycle-key .is-active text { fill: #304e54; font-weight: 700; }
+.three-part-label, .three-force-label { display: block; width: max-content; padding: 3px 6px; border: 1px solid color-mix(in srgb, var(--label-color) 55%, white); border-radius: 2px; background: rgba(255,248,233,.9); box-shadow: 2px 2px 0 rgba(48,78,84,.14); color: var(--label-color); font: 600 10px 'DM Mono', monospace; letter-spacing: .02em; text-transform: uppercase; white-space: nowrap; }
+.three-force-label { padding: 2px 5px; background: rgba(255,250,241,.94); font-size: 9px; }
+.render-fallback { position: absolute; z-index: 4; inset: 0; display: grid; place-content: center; justify-items: center; gap: 9px; padding: 24px; background: #f3e8d8; color: #315964; text-align: center; }
+.demo-pane--simulator .render-fallback { background: #87cad8; }
+.render-fallback__wheel { width: 48px; height: 48px; border: 8px solid #304e54; border-top-color: #efa7bb; border-radius: 50%; }
+.render-fallback strong { font: 700 1.15rem 'Fraunces', serif; }
+.render-fallback p { margin: 0; color: #5f7174; font-size: .76rem; }
+.render-fallback button { display: flex; align-items: center; gap: 7px; margin-top: 6px; padding: 9px 13px; border: 1px solid #75483f; border-radius: 3px; background: #f2c348; box-shadow: 3px 4px 0 #efa7bb; color: #563f39; cursor: pointer; font-size: .7rem; font-weight: 700; }
+
 .lab-layout--painted-notes .demo-pane::after {
   content: '';
   position: absolute;
@@ -388,6 +447,7 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
   .drive-controls button { height: 44px; }
   .flow-chain { flex-wrap: wrap; }
   .flow-chain > span { min-width: 33%; }
+  .engine-diagram { padding: 74px 0 60px; }
 }
 
 @media (max-width: 460px) {

@@ -1,4 +1,4 @@
-import { Billboard, Edges, Line, Text } from '@react-three/drei'
+import { Edges, Html, Line } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -40,7 +40,11 @@ export function ForceArrow({ from = [0, 0, 0], direction = [0, 1, 0], length = 2
     <group>
       <Line points={[from, end]} color={color} lineWidth={4} />
       <mesh position={end} quaternion={quaternion}><coneGeometry args={[0.13, 0.38, 14]} /><meshBasicMaterial color={color} /></mesh>
-      {label && <Billboard position={labelPosition}><Text fontSize={0.23} color={color} outlineWidth={0.018} outlineColor="#fff9ef">{label}</Text></Billboard>}
+      {label && (
+        <Html position={labelPosition} center sprite distanceFactor={9} style={{ pointerEvents: 'none' }}>
+          <span className="three-force-label" style={{ '--label-color': color }}>{label}</span>
+        </Html>
+      )}
     </group>
   )
 }
@@ -70,9 +74,9 @@ export function FlowDots({ points, color = '#f2c94d', speed = 1, count = 10, act
 
 export function PartLabel({ position, children, color = '#315964' }) {
   return (
-    <Billboard position={position}>
-      <Text fontSize={0.2} color={color} outlineWidth={0.025} outlineColor="#fff8e9" anchorX="center">{children}</Text>
-    </Billboard>
+    <Html position={position} center sprite distanceFactor={9} style={{ pointerEvents: 'none' }}>
+      <span className="three-part-label" style={{ '--label-color': color }}>{children}</span>
+    </Html>
   )
 }
 

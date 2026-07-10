@@ -2,7 +2,7 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { Line, OrbitControls } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CarModel } from '../components/CarModel.jsx'
-import { Equation, FlowChain, Metric, Note, ResetButton, SceneBadge, SectionHeader, Segmented, Slider } from '../components/LabUI.jsx'
+import { Equation, FlowChain, Metric, Note, RenderFallback, ResetButton, SceneBadge, SectionHeader, Segmented, Slider } from '../components/LabUI.jsx'
 import { ForceArrow, StudioFloor, StudioLights } from '../components/SceneKit.jsx'
 import { drivetrainOutput, engineOutput, getGearRatio, steeringOutput, stepVehicle } from '../physics.js'
 
@@ -72,6 +72,8 @@ export default function MotionLab() {
   const [steering, setSteering] = useState(0)
   const [gear, setGear] = useState(1)
   const [vehicle, setVehicle] = useState(() => stepVehicle(INITIAL, { throttle: 0.42, gear: 1 }, 0))
+  const [webglLost, setWebglLost] = useState(false)
+  const [rendererKey, setRendererKey] = useState(0)
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -91,6 +93,13 @@ export default function MotionLab() {
   const accelerationG = drivetrain.acceleration / 9.81
 
   const reset = () => { setThrottle(42); setBrake(0); setSteering(0); setGear(1); setMode('power'); setVehicle(stepVehicle(INITIAL, { throttle: 0.42, gear: 1 }, 0)) }
+  const retryRenderer = () => { setWebglLost(false); setRendererKey((value) => value + 1) }
+  const rendererReady = ({ gl }) => {
+    gl.domElement.addEventListener('webglcontextlost', (event) => {
+      event.preventDefault()
+      setWebglLost(true)
+    }, { once: true })
+  }
 
   return (
     <div className="lab-layout lab-layout--cake-box">
@@ -101,9 +110,12 @@ export default function MotionLab() {
             { value: 'power', label: 'Drivetrain' }, { value: 'road', label: 'Tire forces' }, { value: 'brakes', label: 'Brakes' }, { value: 'steering', label: 'Steering' },
           ]} />
         </div>
-        <Canvas camera={{ position: [7.8, 5.6, 8.6], fov: 42 }} shadows dpr={[1, 1.7]} gl={{ preserveDrawingBuffer: true }}>
-          <MotionScene mode={mode} speed={vehicle.speed} throttle={throttle / 100} brake={brake / 100} steering={steering} outputs={outputs} />
-        </Canvas>
+        {webglLost ? <RenderFallback onRetry={retryRenderer} /> : (
+          <Canvas key={rendererKey} camera={{ position: [7.8, 5.6, 8.6], fov: 42 }} shadows dpr={[1, 1.35]}
+            onCreated={rendererReady} fallback={<RenderFallback onRetry={retryRenderer} />}>
+            <MotionScene mode={mode} speed={vehicle.speed} throttle={throttle / 100} brake={brake / 100} steering={steering} outputs={outputs} />
+          </Canvas>
+        )}
         <div className="hud-strip hud-strip--four">
           <span><small>Engine</small><b>{output.torqueNm.toFixed(0)} N·m</b></span>
           <span><small>At wheels</small><b>{drivetrain.wheelTorque.toFixed(0)} N·m</b></span>

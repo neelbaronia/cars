@@ -3,7 +3,7 @@ import { Grid } from '@react-three/drei'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { CarModel } from '../components/CarModel.jsx'
-import { Equation, FlowChain, Metric, Note, ResetButton, SceneBadge, SectionHeader, Segmented, Slider } from '../components/LabUI.jsx'
+import { Equation, FlowChain, Metric, Note, RenderFallback, ResetButton, SceneBadge, SectionHeader, Segmented, Slider } from '../components/LabUI.jsx'
 import { ForceArrow, StudioLights } from '../components/SceneKit.jsx'
 import { clamp, stepVehicle } from '../physics.js'
 
@@ -274,6 +274,8 @@ export default function SimulatorLab() {
   const [cameraMode, setCameraMode] = useState('chase')
   const [resetSignal, setResetSignal] = useState(0)
   const [telemetry, setTelemetry] = useState(INITIAL_TELEMETRY)
+  const [webglLost, setWebglLost] = useState(false)
+  const [rendererKey, setRendererKey] = useState(0)
   const speedKph = Math.abs(telemetry.speed) * 3.6
   const gearLabel = telemetry.gear === 'N' && driveMode !== 'N' ? `${driveMode} WAIT` : driveMode === 'D' ? telemetry.gear : driveMode
   const displayedTorque = Math.abs(telemetry.engineTorque) < 0.5 ? 0 : telemetry.engineTorque
@@ -283,6 +285,13 @@ export default function SimulatorLab() {
     releaseAll()
     setTelemetry(INITIAL_TELEMETRY)
     setDriveMode('D'); setFocus('all'); setExplodePercent(0); setCameraMode('chase'); setResetSignal((value) => value + 1)
+  }
+  const retryRenderer = () => { setWebglLost(false); setRendererKey((value) => value + 1) }
+  const rendererReady = ({ gl }) => {
+    gl.domElement.addEventListener('webglcontextlost', (event) => {
+      event.preventDefault()
+      setWebglLost(true)
+    }, { once: true })
   }
 
   return (
@@ -294,10 +303,13 @@ export default function SimulatorLab() {
             { value: 'all', label: 'Drive' }, { value: 'power', label: 'Power' }, { value: 'brakes', label: 'Brakes' }, { value: 'steering', label: 'Steering' },
           ]} />
         </div>
-        <Canvas camera={{ position: [0, 4.8, -51], fov: 48 }} shadows dpr={[1, 1.55]} gl={{ preserveDrawingBuffer: true }}>
-          <DriveScene inputRef={inputRef} displayTelemetry={telemetry} driveMode={driveMode} focus={focus} explode={explodePercent / 100}
-            cameraMode={cameraMode} resetSignal={resetSignal} onTelemetry={setTelemetry} />
-        </Canvas>
+        {webglLost ? <RenderFallback onRetry={retryRenderer} /> : (
+          <Canvas key={rendererKey} camera={{ position: [0, 4.8, -51], fov: 48 }} shadows dpr={[1, 1.35]}
+            onCreated={rendererReady} fallback={<RenderFallback onRetry={retryRenderer} />}>
+            <DriveScene inputRef={inputRef} displayTelemetry={telemetry} driveMode={driveMode} focus={focus} explode={explodePercent / 100}
+              cameraMode={cameraMode} resetSignal={resetSignal} onTelemetry={setTelemetry} />
+          </Canvas>
+        )}
 
         <div className="drive-controls" aria-label="Touch driving controls">
           <button type="button" className={pressed.left ? 'is-active' : ''} {...bind('left')} aria-label="Steer left" aria-pressed={pressed.left}>A<br /><span>LEFT</span></button>

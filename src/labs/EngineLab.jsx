@@ -1,10 +1,7 @@
-import { Canvas } from '@react-three/fiber'
-import { Edges, Line, OrbitControls } from '@react-three/drei'
 import { Pause, Play } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import * as THREE from 'three'
+import { EngineDiagram } from '../components/EngineDiagram.jsx'
 import { Equation, FlowChain, Metric, Note, ResetButton, SceneBadge, SectionHeader, Segmented, Slider } from '../components/LabUI.jsx'
-import { FlowDots, ForceArrow, PaintedBox, PartLabel, StudioFloor, StudioLights } from '../components/SceneKit.jsx'
 import { engineOutput } from '../physics.js'
 
 const STROKES = [
@@ -13,9 +10,6 @@ const STROKES = [
   { name: 'Power', verb: 'Push', color: '#e6543f', detail: 'Spark + expanding gas · piston down' },
   { name: 'Exhaust', verb: 'Clear', color: '#d38d27', detail: 'Exhaust valve open · piston up' },
 ]
-const ENGINE_AIR_PATH = [[-4.2, 1.15, 0], [-3.15, 1.15, 0], [-2.1, 1.45, 0], [-1.35, 1.38, 0]]
-const ENGINE_FUEL_PATH = [[3.65, -0.85, 0.55], [2.7, -0.72, 0.5], [1.8, 0.55, 0.3], [-0.95, 1.58, 0.12]]
-const ENGINE_EXHAUST_PATH = [[-0.65, 1.38, -0.05], [0.25, 1.48, -0.1], [1.05, 0.95, -0.16], [3.7, 0.92, -0.25]]
 
 function effectiveLoad(throttle, rpm) {
   if (throttle > 0) return throttle
@@ -31,82 +25,6 @@ function cylinderPressure(progress, spark, throttle, rpm) {
   if (stroke === 2 && spark && load > 0) return 11 + (1 - within) ** 2 * (8 + load * 0.45)
   if (stroke === 2) return 1 + 10 * (1 - within) ** 1.5
   return 1.08 + (1 - within) * 0.35
-}
-
-function Valve({ position, open, color }) {
-  return (
-    <group position={[position[0], position[1] - (open ? 0.18 : 0), position[2]]}>
-      <mesh><cylinderGeometry args={[0.055, 0.055, 0.5, 12]} /><meshStandardMaterial color={color} roughness={0.55} /></mesh>
-      <mesh position={[0, -0.25, 0]}><cylinderGeometry args={[0.18, 0.11, 0.08, 16]} /><meshStandardMaterial color={color} /></mesh>
-    </group>
-  )
-}
-
-function CycleEngine({ progress, throttle, rpm, spark, mode }) {
-  const stroke = Math.floor(progress) % 4
-  const radians = progress * Math.PI
-  const crankRadius = 0.48
-  const rodLength = 1.25
-  const crankPin = [Math.sin(radians) * crankRadius, -1.18 + Math.cos(radians) * crankRadius, 0.06]
-  const pistonY = crankPin[1] + Math.sqrt(rodLength ** 2 - crankPin[0] ** 2) + 0.15
-  const load = effectiveLoad(throttle, rpm)
-  const firing = spark && load > 0
-  const pressure = cylinderPressure(progress, spark, throttle, rpm)
-  const netGasForce = (pressure - 1) * 100000 * 0.0055
-  const chargeColor = stroke === 0 ? '#66b8c0' : stroke === 1 ? '#ad94c7' : stroke === 2 && firing ? '#e6543f' : '#c6a574'
-  const chargeScale = 0.48 + (pistonY + 0.68) * 0.18
-  const fuelActive = load > 0 && stroke === 0
-
-  return (
-    <group>
-      <StudioFloor size={18} y={-1.62} />
-
-      <group>
-        <PaintedBox size={[1.5, 0.7, 1.05]} position={[3.55, -0.9, 0.55]} color="#f2c348" opacity={mode === 'cycle' ? 0.3 : 1} />
-        <PartLabel position={[3.55, -0.25, 0.55]} color="#8b6515">FUEL TANK · REAR OF CAR</PartLabel>
-        <FlowDots points={ENGINE_FUEL_PATH} color="#f2c348" speed={0.4 + throttle / 50} count={11} active={fuelActive && mode !== 'energy'} />
-        <FlowDots points={ENGINE_AIR_PATH} color="#3f9a9d" speed={0.6 + throttle / 70} count={10} active={stroke === 0 && mode !== 'energy'} />
-        <FlowDots points={ENGINE_EXHAUST_PATH} color="#b47b45" speed={0.8} count={9} active={stroke === 3 && mode !== 'energy'} />
-        <PartLabel position={[-3.4, 1.55, 0]} color="#347d80">AIR FILTER + THROTTLE</PartLabel>
-        <PartLabel position={[2.65, 1.3, -0.1]} color="#8a6632">CATALYST → MUFFLER</PartLabel>
-      </group>
-
-      <group position={[-0.75, 0, 0]}>
-        <mesh position={[0, 0.45, 0]}>
-          <boxGeometry args={[1.45, 2.55, 1.25]} />
-          <meshStandardMaterial color="#e8d9c5" roughness={0.75} transparent opacity={0.23} side={THREE.DoubleSide} depthWrite={false} />
-          <Edges color="#7a5b50" />
-        </mesh>
-        <PaintedBox size={[1.2, 0.28, 1.08]} position={[0, pistonY, 0]} color="#f4c95a" emissive="#e6543f" emissiveIntensity={stroke === 2 && spark ? throttle / 180 : 0} />
-        <mesh position={[0, (pistonY + 1.18) / 2, 0]} scale={[chargeScale, Math.max(0.18, 1.15 - pistonY * 0.36), chargeScale]}>
-          <sphereGeometry args={[0.72, 24, 16]} />
-          <meshStandardMaterial color={chargeColor} transparent opacity={mode === 'energy' ? 0.72 : 0.43}
-            emissive={chargeColor} emissiveIntensity={stroke === 2 && firing ? pressure / 34 : 0} depthWrite={false} />
-        </mesh>
-        <Line points={[[0, pistonY - 0.15, 0.03], crankPin]} color="#76569b" lineWidth={9} />
-        <mesh position={crankPin}><sphereGeometry args={[0.16, 16, 12]} /><meshStandardMaterial color="#65468b" /></mesh>
-        <mesh position={[0, -1.18, 0.06]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.48, 0.07, 10, 28]} /><meshStandardMaterial color="#76569b" /></mesh>
-        <Line points={[[0, -1.18, -0.58], [0, -1.18, 1.15]]} color="#76569b" lineWidth={7} />
-        <Valve position={[-0.38, 1.65, 0]} open={stroke === 0} color="#3f9a9d" />
-        <Valve position={[0.38, 1.65, 0]} open={stroke === 3} color="#d38d27" />
-        <mesh position={[0, 1.72, 0.18]}>
-          <cylinderGeometry args={[0.06, 0.06, 0.42, 10]} /><meshStandardMaterial color="#f7efe4" />
-        </mesh>
-        {firing && stroke === 2 && progress % 1 < 0.18 && (
-          <group position={[0, 1.46, 0.18]}>
-            <mesh><octahedronGeometry args={[0.19, 0]} /><meshBasicMaterial color="#fff7a8" /></mesh>
-            <pointLight color="#ff9b56" intensity={5} distance={2.2} />
-          </group>
-        )}
-        {mode === 'energy' && Math.abs(netGasForce) > 500 && (
-          <ForceArrow from={[0.72, pistonY + 0.1, 0.4]} direction={[0, netGasForce >= 0 ? -1 : 1, 0]}
-            length={Math.min(1.55, Math.abs(netGasForce) / 11000)} color="#e6543f" label="NET GAS FORCE" />
-        )}
-        {mode === 'energy' && <PartLabel position={[0.9, -1.25, 0.25]} color="#65468b">CRANKSHAFT TORQUE</PartLabel>}
-      </group>
-    </group>
-  )
 }
 
 export default function EngineLab() {
@@ -135,6 +53,7 @@ export default function EngineLab() {
   const crankAngle = Math.round(progress * 180)
   const pressureBar = cylinderPressure(progress, spark, throttle, rpm)
   const pistonForce = (pressureBar - 1) * 100000 * 0.0055
+  const displayedPistonForce = Math.abs(pistonForce) < 50 ? 0 : pistonForce
   const instantaneousTorque = pistonForce * 0.043 * Math.sin(progress * Math.PI)
   const output = engineOutput({ rpm, throttle: throttle / 100, spark })
   const fuelPerCycleMg = output.fuelRateGps > 0 ? (output.fuelRateGps / Math.max(1, rpm / 120 * 4)) * 1000 : 0
@@ -152,12 +71,8 @@ export default function EngineLab() {
             { value: 'path', label: 'Fuel path' }, { value: 'cycle', label: '4 strokes' }, { value: 'energy', label: 'Force + heat' },
           ]} />
         </div>
-        <Canvas camera={{ position: [8.5, 4.3, 8], fov: 42 }} shadows dpr={[1, 1.7]} gl={{ preserveDrawingBuffer: true }}>
-          <color attach="background" args={['#f3e8d8']} />
-          <StudioLights />
-          <CycleEngine progress={progress} throttle={throttle} rpm={rpm} spark={spark} mode={mode} />
-          <OrbitControls makeDefault enablePan={false} minDistance={6} maxDistance={14} target={[0, 0.15, 0]} maxPolarAngle={Math.PI * 0.48} />
-        </Canvas>
+        <EngineDiagram progress={progress} throttle={throttle} rpm={rpm} spark={spark} mode={mode}
+          pressureBar={pressureBar} pistonForce={pistonForce} />
         <div className="cycle-ribbon">
           <span style={{ '--stroke-color': stroke.color }}>{strokeIndex + 1}</span>
           <p><small>{strokeIndex === 2 && !combustionActive ? 'Recover' : stroke.verb}</small><strong>{displayedStrokeName}</strong><b>{displayedStrokeDetail}</b></p>
@@ -187,7 +102,7 @@ export default function EngineLab() {
 
         <div className="metric-grid">
           <Metric label="Cylinder pressure" value={`${pressureBar.toFixed(1)} bar`} />
-          <Metric label="Net gas force" value={`${pistonForce >= 0 ? '+' : ''}${(pistonForce / 1000).toFixed(1)} kN`} tone="blue" />
+          <Metric label="Net gas force" value={`${displayedPistonForce > 0 ? '+' : ''}${(displayedPistonForce / 1000).toFixed(1)} kN`} tone="blue" />
           <Metric label="Whole-engine net torque" value={`${output.torqueNm.toFixed(0)} N·m`} tone="violet" />
           <Metric label="Shaft power" value={`${output.powerKw.toFixed(1)} kW`} tone="yellow" />
         </div>
