@@ -11,9 +11,12 @@ import { usePerspectiveInput } from '../usePerspectiveInput.js'
 const INITIAL_TELEMETRY = {
   speed: 0, rpm: 850, gear: 1, fuel: 44, brakePressure: 0, steeringDeg: 0,
   acceleration: 0, lateralG: 0, grip: 0, engineTorque: 0, driveForce: 0,
-  resistanceForce: 0, appliedThrottle: 0, parkingBrake: 0,
+  resistanceForce: 0, brakeForce: 0, aeroDrag: 0, rollingResistance: 0,
+  appliedThrottle: 0, parkingBrake: 0,
   brakeTemp: 22, status: 'Ready', x: 0, z: -42,
 }
+const CAR_VISUAL_SCALE = .68
+const CAR_RIDE_HEIGHT = -1.07
 
 function automaticGear(speed, throttle) {
   const kph = Math.max(0, speed * 3.6)
@@ -99,7 +102,7 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
   useEffect(() => {
     cameraYaw.current = 0
     cameraElevationOffset.current = 0
-    onCameraView({ yaw: 0, elevation: cameraMode === 'top' ? 81 : 28 })
+    onCameraView({ yaw: 0, elevation: cameraMode === 'top' ? 81 : 22 })
   }, [cameraMode, onCameraView, resetSignal])
 
   useFrame((_, frameDelta) => {
@@ -154,7 +157,7 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
     }
 
     const current = state.current
-    const position = new THREE.Vector3(current.x, 0, current.z)
+    const position = new THREE.Vector3(current.x, CAR_RIDE_HEIGHT, current.z)
     const forward = new THREE.Vector3(Math.sin(current.heading), 0, Math.cos(current.heading))
     if (cameraShiftX || cameraShiftZ) camera.position.add(new THREE.Vector3(cameraShiftX, 0, cameraShiftZ))
     if (car.current) {
@@ -173,7 +176,7 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
     cameraYaw.current = Math.atan2(Math.sin(cameraYaw.current), Math.cos(cameraYaw.current))
     cameraElevationOffset.current += elevationDirection * frameDelta * 0.72
 
-    const baseElevation = cameraMode === 'top' ? 1.42 : 0.48
+    const baseElevation = cameraMode === 'top' ? 1.42 : .39
     const elevation = cameraMode === 'top'
       ? clamp(baseElevation + cameraElevationOffset.current, 1.0, 1.52)
       : clamp(baseElevation + cameraElevationOffset.current, 0.2, 1.15)
@@ -183,7 +186,7 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
       onCameraView({ yaw: Math.round(cameraYaw.current * 180 / Math.PI), elevation: Math.round(elevation * 180 / Math.PI) })
       cameraReportClock.current = 0
     }
-    const cameraRadius = cameraMode === 'top' ? 17.5 : 10.4
+    const cameraRadius = (cameraMode === 'top' ? 14.5 : 8.1) + explode * 1.8
     const rear = forward.clone().negate()
     const right = new THREE.Vector3(forward.z, 0, -forward.x)
     const horizontal = rear.multiplyScalar(Math.cos(cameraYaw.current)).addScaledVector(right, Math.sin(cameraYaw.current))
@@ -212,6 +215,8 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
         acceleration: current.drivetrain.acceleration, lateralG, grip,
         engineTorque: current.engine.torqueNm, driveForce: current.drivetrain.tractionLimitedForce,
         resistanceForce: current.drivetrain.brakeForce + current.drivetrain.aeroDrag + current.drivetrain.rollingResistance,
+        brakeForce: current.drivetrain.brakeForce, aeroDrag: current.drivetrain.aeroDrag,
+        rollingResistance: current.drivetrain.rollingResistance,
         appliedThrottle: lastThrottle,
         brakeTemp: current.brakeTemp, status, x: current.x, z: current.z,
       })
@@ -221,9 +226,16 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
 
   const showForces = focus === 'forces'
   const driveForce = displayTelemetry.driveForce
-  const resistanceForce = displayTelemetry.resistanceForce
   const driveArrowLength = Math.min(2.6, Math.abs(driveForce) / 2200)
-  const resistanceArrowLength = Math.min(2.6, Math.abs(resistanceForce) / 3000)
+  const brakeArrowLength = Math.min(2.8, displayTelemetry.brakeForce / 4000)
+  const dragArrowLength = Math.min(2.4, displayTelemetry.aeroDrag / 1000)
+  const rollingArrowLength = Math.min(1.2, displayTelemetry.rollingResistance / 500)
+  const wheelX = 1.57 + explode * .9
+  const shellOpacity = focus === 'body'
+    ? THREE.MathUtils.lerp(.96, .24, explode)
+    : focus === 'all' || focus === 'drive'
+      ? THREE.MathUtils.lerp(.58, .14, explode)
+      : focus === 'forces' ? .76 : THREE.MathUtils.lerp(.2, .08, explode)
   return (
     <>
       <color attach="background" args={['#87cad8']} />
@@ -231,18 +243,31 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
       <StudioLights />
       <TestTrack />
       <group ref={car}>
-        <CarModel explode={explode} focus={focus} bodyOpacity={explode > 0.05 ? 0.18 : 0.94}
-          throttle={displayTelemetry.appliedThrottle} brake={displayTelemetry.brakePressure / 90} parkingBrake={displayTelemetry.parkingBrake}
-          steering={displayTelemetry.steeringDeg} speed={displayTelemetry.speed} labels={explode > 0.22}
-          suspensionLoad={clamp(-displayTelemetry.acceleration / 7, -0.5, 1)} />
-        {showForces && (
-          <group>
-            {driveArrowLength > 0.05 && <ForceArrow from={[0, -0.82, 2.1]} direction={[0, 0, driveForce >= 0 ? -1 : 1]}
-              length={driveArrowLength} color="#76569b" label="DRIVE FORCE" />}
-            {resistanceArrowLength > 0.05 && Math.abs(displayTelemetry.speed) > 0.05 && <ForceArrow from={[0, 0.5, -2.4]}
-              direction={[0, 0, displayTelemetry.speed >= 0 ? 1 : -1]} length={resistanceArrowLength} color="#e6543f" label="BRAKE + DRAG" />}
-          </group>
-        )}
+        <group scale={CAR_VISUAL_SCALE}>
+          <CarModel explode={explode} focus={focus} bodyOpacity={shellOpacity}
+            throttle={displayTelemetry.appliedThrottle} rpm={displayTelemetry.rpm} gear={displayTelemetry.gear}
+            brake={displayTelemetry.brakePressure / 90} parkingBrake={displayTelemetry.parkingBrake}
+            steering={displayTelemetry.steeringDeg} speed={displayTelemetry.speed}
+            suspensionLoad={clamp(-displayTelemetry.acceleration / 7, -0.5, 1)} />
+          {showForces && (
+            <group>
+              {driveArrowLength > .05 && [-wheelX, wheelX].map((x, index) => <ForceArrow key={`drive-${x}`} from={[x, -.6, 2.05]}
+                direction={[0, 0, driveForce >= 0 ? -1 : 1]} length={driveArrowLength} color="#76569b"
+                label={index === 0 ? (driveForce >= 0 ? 'ROAD DRIVES CAR' : 'DRIVETRAIN DRAG') : undefined} />)}
+              {brakeArrowLength > .05 && (displayTelemetry.brakePressure > 0
+                ? [[-wheelX, -2.05], [wheelX, -2.05], [-wheelX, 2.05], [wheelX, 2.05]]
+                : [[-wheelX, 2.05], [wheelX, 2.05]]).map(([x, z], index) => <ForceArrow key={`brake-${x}-${z}`}
+                  from={[x, -.6, z]} direction={[0, 0, displayTelemetry.speed >= 0 ? 1 : -1]} length={brakeArrowLength}
+                  color="#e6543f" label={index === 0 ? (displayTelemetry.brakePressure > 0 ? 'SERVICE BRAKES' : 'PARKING BRAKE') : undefined} />)}
+              {rollingArrowLength > .05 && Math.abs(displayTelemetry.speed) > .05
+                && [[-wheelX, -2.05], [wheelX, -2.05], [-wheelX, 2.05], [wheelX, 2.05]].map(([x, z], index) => <ForceArrow key={`rolling-${x}-${z}`}
+                  from={[x, -.61, z]} direction={[0, 0, displayTelemetry.speed >= 0 ? 1 : -1]} length={rollingArrowLength}
+                  color="#df9d34" label={index === 3 ? 'ROLLING LOSS' : undefined} />)}
+              {dragArrowLength > .05 && Math.abs(displayTelemetry.speed) > .4 && <ForceArrow from={[0, .45, -.2]}
+                direction={[0, 0, displayTelemetry.speed >= 0 ? 1 : -1]} length={dragArrowLength} color="#287f98" label="AERO DRAG" />}
+            </group>
+          )}
+        </group>
       </group>
     </>
   )
@@ -301,10 +326,10 @@ export default function SimulatorLab() {
   const { inputRef, pressed, bind, releaseAll } = useDriveInput()
   const { perspectiveInputRef, releasePerspective } = usePerspectiveInput()
   const [driveMode, setDriveMode] = useState('D')
-  const [focus, setFocus] = useState('all')
+  const [focus, setFocus] = useState('body')
   const [explodePercent, setExplodePercent] = useState(0)
   const [cameraMode, setCameraMode] = useState('chase')
-  const [cameraView, setCameraView] = useState({ yaw: 0, elevation: 28 })
+  const [cameraView, setCameraView] = useState({ yaw: 0, elevation: 22 })
   const [resetSignal, setResetSignal] = useState(0)
   const [telemetry, setTelemetry] = useState(INITIAL_TELEMETRY)
   const [webglLost, setWebglLost] = useState(false)
@@ -318,8 +343,8 @@ export default function SimulatorLab() {
     releaseAll()
     releasePerspective()
     setTelemetry(INITIAL_TELEMETRY)
-    setCameraView({ yaw: 0, elevation: 28 })
-    setDriveMode('D'); setFocus('all'); setExplodePercent(0); setCameraMode('chase'); setResetSignal((value) => value + 1)
+    setCameraView({ yaw: 0, elevation: 22 })
+    setDriveMode('D'); setFocus('body'); setExplodePercent(0); setCameraMode('chase'); setResetSignal((value) => value + 1)
   }
   const retryRenderer = () => { setWebglLost(false); setRendererKey((value) => value + 1) }
   const rendererReady = ({ gl }) => {
@@ -335,7 +360,7 @@ export default function SimulatorLab() {
         <div className="scene-toolbar"><SceneBadge>{telemetry.status} · {speedKph.toFixed(0)} km/h</SceneBadge><ResetButton onClick={reset} /></div>
         <div className="scene-mode simulator-scene-mode">
           <Segmented label="Visible car system" value={focus} onChange={setFocus} options={[
-            { value: 'all', label: 'Drive' }, { value: 'power', label: 'Power' }, { value: 'brakes', label: 'Brakes' }, { value: 'steering', label: 'Steering' },
+            { value: 'body', label: 'Exterior' }, { value: 'power', label: 'Drivetrain' }, { value: 'brakes', label: 'Brakes' }, { value: 'steering', label: 'Steering' },
           ]} />
         </div>
         <div className="sim-camera-hint"><span>← →</span> orbit <span>↑ ↓</span> height <b>{cameraView.yaw}° / {cameraView.elevation}°</b></div>
@@ -373,12 +398,13 @@ export default function SimulatorLab() {
           <div className="group-title"><span>Driver + x-ray</span><small>Keyboard or scene buttons</small></div>
           <div className="control-pair"><label>Selector<Segmented label="Drive selector" value={driveMode} onChange={setDriveMode} options={['D', 'N', 'R']} /></label>
             <label>Camera<Segmented label="Camera" value={cameraMode} onChange={setCameraMode} options={[{ value: 'chase', label: 'Chase' }, { value: 'top', label: 'Top' }]} /></label></div>
-          <Slider label="Exploded view" value={explodePercent} min={0} max={100} unit="%" onChange={setExplodePercent} accent="#76569b" />
+          <Slider label="Exploded view" value={explodePercent} min={0} max={100} unit="%"
+            onChange={(value) => { setExplodePercent(value); if (value > 5 && focus === 'body') setFocus('all') }} accent="#76569b" />
           <div className="system-filter">
             <span>Trace a system</span>
             <Segmented label="X-ray system" value={focus} onChange={setFocus} options={[
-              { value: 'all', label: 'All' }, { value: 'fuel', label: 'Fuel' }, { value: 'power', label: 'Drive' }, { value: 'brakes', label: 'Fluid' },
-              { value: 'steering', label: 'Steer' }, { value: 'suspension', label: 'Ride' }, { value: 'forces', label: 'Forces' },
+              { value: 'all', label: 'All traces' }, { value: 'fuel', label: 'Fuel' }, { value: 'power', label: 'Drivetrain' }, { value: 'brakes', label: 'Hydraulics' },
+              { value: 'steering', label: 'Steering' }, { value: 'suspension', label: 'Suspension' }, { value: 'forces', label: 'Forces' },
             ]} />
           </div>
         </div>
