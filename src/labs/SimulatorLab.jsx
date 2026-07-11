@@ -117,7 +117,8 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
 
     while (accumulator.current >= fixedStep) {
       const input = inputRef.current
-      const steeringTarget = (input.right ? 1 : 0) - (input.left ? 1 : 0)
+      // Positive steering is a left turn in the physics model; map the driver-facing A/D controls accordingly.
+      const steeringTarget = (input.left ? 1 : 0) - (input.right ? 1 : 0)
       const steeringRate = steeringTarget === 0 ? 5.2 : 7.5
       steeringVisual.current += (steeringTarget * 30 - steeringVisual.current) * Math.min(1, steeringRate * fixedStep)
       const fuelAvailable = state.current.fuel > 0.001
@@ -188,7 +189,8 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
     }
     const cameraRadius = (cameraMode === 'top' ? 14.5 : 8.1) + explode * 1.8
     const rear = forward.clone().negate()
-    const right = new THREE.Vector3(forward.z, 0, -forward.x)
+    // With y up, forward × up is the driver's/camera's right-hand side.
+    const right = new THREE.Vector3(-forward.z, 0, forward.x)
     const horizontal = rear.multiplyScalar(Math.cos(cameraYaw.current)).addScaledVector(right, Math.sin(cameraYaw.current))
     const desired = position.clone()
       .addScaledVector(horizontal, cameraRadius * Math.cos(elevation))
