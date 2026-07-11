@@ -446,6 +446,14 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
 .motion-study-toolbar div b { min-width: 38px; color: #746e68; font: 600 .52rem 'DM Mono', monospace; text-align: center; }
 .motion-study-toolbar button:hover { border-color: var(--part-color); color: var(--part-color); }
 .motion-study-toolbar:focus-visible { outline: 2px solid var(--part-color); outline-offset: 2px; }
+.motion-cylinder-summary { position: absolute; z-index: 7; top: 126px; left: 20px; width: 258px; display: grid; gap: 8px; padding: 12px 13px; border: 1px solid color-mix(in srgb, var(--part-color) 58%, #b99d83); border-left: 5px solid var(--part-color); background: rgba(255,248,233,.96); box-shadow: 4px 5px 0 rgba(48,78,84,.17); pointer-events: none; }
+.motion-cylinder-summary > span { color: var(--part-color); font: 700 .53rem 'DM Mono', monospace; letter-spacing: .06em; text-transform: uppercase; }
+.motion-cylinder-summary > strong { color: #38545b; font: 700 .82rem/1.25 'Fraunces', serif; }
+.motion-cylinder-summary > div { display: grid; grid-template-columns: repeat(4, 1fr); border-block: 1px solid color-mix(in srgb, var(--part-color) 30%, #d8c8b7); }
+.motion-cylinder-summary i { padding: 5px 2px; border-right: 1px solid color-mix(in srgb, var(--part-color) 20%, #d8c8b7); color: var(--part-color); font: normal 700 .48rem 'DM Mono', monospace; text-align: center; }
+.motion-cylinder-summary i:last-child { border-right: 0; }
+.motion-cylinder-summary p { margin: 0; color: #646e6d; font-size: .63rem; line-height: 1.45; }
+.motion-cylinder-summary > b { color: #7c706a; font: 600 .5rem 'DM Mono', monospace; }
 .drivetrain-hotspot { display: flex; align-items: center; gap: 5px; padding: 3px 7px 3px 3px; border: 1px solid color-mix(in srgb, var(--part-color) 70%, #75483f); border-radius: 3px; background: rgba(255,248,233,.95); box-shadow: 2px 3px 0 rgba(48,78,84,.2); color: #354f55; cursor: pointer; font: 700 8px 'DM Mono', monospace; white-space: nowrap; transition: transform .12s, box-shadow .12s, background .12s; }
 .drivetrain-hotspot span { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 2px; background: var(--part-color); color: white; }
 .drivetrain-hotspot b { font: inherit; letter-spacing: .025em; }
@@ -480,6 +488,25 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
 .motion-study-steps span { min-width: 0; display: grid; align-content: center; gap: 5px; padding: 9px 8px; border-right: 1px solid color-mix(in srgb, var(--part-color) 24%, #d8c8b7); color: #5f6c6d; font: 600 .55rem/1.35 'DM Mono', monospace; text-align: center; }
 .motion-study-steps span:last-child { border-right: 0; }
 .motion-study-steps b { width: 19px; height: 19px; display: grid; place-items: center; justify-self: center; border-radius: 50%; background: var(--part-color); color: white; font-size: .5rem; }
+.cylinder-count-lesson { display: grid; gap: 11px; padding: 14px; border: 1px solid color-mix(in srgb, var(--part-color) 40%, #d8c8b7); background: rgba(255,248,233,.78); }
+.cylinder-count-lesson > header { display: grid; gap: 3px; }
+.cylinder-count-lesson > header span { color: var(--part-color); font: 700 .55rem 'DM Mono', monospace; letter-spacing: .06em; text-transform: uppercase; }
+.cylinder-count-lesson > header strong { color: #38545b; font: 700 .9rem/1.3 'Fraunces', serif; }
+.cylinder-count-lesson > p { margin: 0; color: #666f6f; font-size: .69rem; line-height: 1.5; }
+.cylinder-fire-sequence { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid color-mix(in srgb, var(--part-color) 34%, #d8c8b7); }
+.cylinder-fire-sequence span { min-width: 0; display: grid; grid-template-columns: 1fr auto; gap: 3px 6px; align-items: center; padding: 7px 8px; border-right: 1px solid color-mix(in srgb, var(--part-color) 24%, #d8c8b7); background: #fffaf0; }
+.cylinder-fire-sequence span:last-child { border-right: 0; }
+.cylinder-fire-sequence b { color: #38545b; font: 700 .52rem 'DM Mono', monospace; text-transform: uppercase; }
+.cylinder-fire-sequence i { grid-row: 1 / 3; grid-column: 2; color: var(--part-color); font: normal 700 .8rem/1 sans-serif; }
+.cylinder-fire-sequence small { color: #8a7670; font: 600 .48rem 'DM Mono', monospace; }
+.cylinder-event-rate { padding: 7px 9px; background: color-mix(in srgb, var(--part-color) 10%, #fffaf0); color: #6b6f6c; font: 600 .55rem/1.4 'DM Mono', monospace; }
+.cylinder-event-rate strong { color: var(--part-color); }
+.cylinder-count-effects { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.cylinder-count-effects span { display: grid; align-content: start; gap: 4px; padding: 9px; border-top: 4px solid var(--part-color); background: #fffaf0; }
+.cylinder-count-effects b { color: #38545b; font-size: .65rem; }
+.cylinder-count-effects small { color: #6b7271; font-size: .6rem; line-height: 1.45; }
+.cylinder-count-lesson .cylinder-count-caveat { padding-top: 8px; border-top: 1px dashed color-mix(in srgb, var(--part-color) 32%, #d8c8b7); }
+.cylinder-count-caveat strong { color: #38545b; }
 .motion-internals { display: grid; gap: 8px; }
 .motion-internals > strong { color: #38545b; font: 700 .65rem 'DM Mono', monospace; text-transform: uppercase; }
 .motion-internals ul { columns: 2; margin: 0; padding-left: 17px; color: #697171; font-size: .68rem; line-height: 1.55; }
@@ -548,6 +575,7 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
   .drive-controls button { height: 42px; }
   .motion-scene-inspector { width: 245px; }
   .motion-study-toolbar { right: 12px; left: 12px; }
+  .motion-cylinder-summary { left: 12px; width: 225px; }
   .drivetrain-hotspot b { display: none; }
   .motion-torque-strip i { padding-inline: 5px; font-size: .47rem; }
 }
@@ -585,6 +613,7 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
   .motion-study-flow { right: 12px; bottom: 12px; left: 12px; grid-template-columns: repeat(3, 1fr); }
   .motion-study-flow > span { display: none; }
   .motion-study-flow > b { padding: 7px 8px; }
+  .motion-cylinder-summary { display: none; }
   .motion-lesson-pane .lesson-heading h1 { font-size: 1.72rem; }
   .sim-camera-hint { top: 64px; right: 12px; }
 }
@@ -627,6 +656,7 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
   .motion-study-toolbar > div { justify-self: end; }
   .motion-study-flow em { font-size: .48rem; }
   .motion-part-inspector { padding: 14px; }
+  .cylinder-count-effects { grid-template-columns: 1fr; }
   .motion-internals ul { columns: 1; }
   .motion-lesson-pane .lesson-heading h1 { font-size: 1.6rem; }
   .sim-camera-hint { display: none; }

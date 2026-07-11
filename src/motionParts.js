@@ -9,7 +9,7 @@ export const MOTION_PARTS = [
   {
     id: 'engine', number: '02', short: 'ENGINE', name: 'Pistons + crankshaft', color: '#e6543f',
     summary: 'Combustion pressure becomes a twisting crankshaft.',
-    detail: 'Hot gas pushes the pistons. Connecting rods push off-center on the crank throws, turning straight piston force into engine torque. Several cylinders overlap their power strokes to keep the shaft turning.',
+    detail: 'Hot gas pushes the pistons. Connecting rods push off-center on the crank throws, turning straight piston force into engine torque. Multiple cylinders stagger their power strokes so the crank receives more frequent pushes.',
     studyFlow: ['Gas pressure', 'Piston + connecting rod', 'Crankshaft torque'],
     internals: ['Cylinder head, intake valve, and exhaust valve', 'Spark plug and combustion chamber', 'Piston and sealing rings', 'Connecting rod and crank throw', 'Crankshaft and output flywheel'],
   },

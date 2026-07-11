@@ -12,6 +12,29 @@ import { usePerspectiveInput } from '../usePerspectiveInput.js'
 
 const INITIAL = { speed: 0, rpm: 850, heading: 0, x: 0, z: 0, gear: 1, mass: 1450, wheelRadius: 0.31, wheelbase: 2.7 }
 const PART_BY_ID = Object.fromEntries(MOTION_PARTS.map((part) => [part.id, part]))
+const FOUR_CYLINDER_EVENTS = [0, 180, 360, 540]
+
+function CylinderCountLesson({ rpm }) {
+  const eventsPerSecond = Math.max(0, rpm) * FOUR_CYLINDER_EVENTS.length / 120
+  return (
+    <section className="cylinder-count-lesson" aria-label="Why a four-stroke engine uses multiple cylinders">
+      <header><span>Why multiple cylinders?</span><strong>A new crankshaft push every 180°</strong></header>
+      <p>One four-stroke cylinder produces one power stroke every two crank turns, or 720°. Four evenly phased cylinders divide that cycle into four power events.</p>
+      <div className="cylinder-fire-sequence" aria-label="Four power events spaced at zero, 180, 360, and 540 crankshaft degrees">
+        {FOUR_CYLINDER_EVENTS.map((angle, index) => (
+          <span key={angle}><b>Cyl {index + 1}</b><i aria-hidden="true">●</i><small>{angle}°</small></span>
+        ))}
+      </div>
+      <div className="cylinder-event-rate">At {rpm.toFixed(0)} rpm: <strong>about {eventsPerSecond.toFixed(0)} power events each second</strong></div>
+      <div className="cylinder-count-effects">
+        <span><b>Smoother torque</b><small>Shorter gaps between pushes reduce crank-speed ripple; the flywheel blends the remaining pulses.</small></span>
+        <span><b>More usable speed</b><small>Dividing displacement among smaller pistons can reduce each piston’s mass and make higher rpm practical.</small></span>
+        <span><b>The cost</b><small>More pistons, valves, bearings, and surfaces add friction, weight, complexity, and expense.</small></span>
+      </div>
+      <p className="cylinder-count-caveat"><strong>Cylinder count alone does not set power.</strong> Total displacement, airflow, boost, combustion efficiency, and rpm matter too.</p>
+    </section>
+  )
+}
 
 function MovingRoadMarks({ speed }) {
   const marks = useRef([])
@@ -232,6 +255,15 @@ export default function MotionLab() {
             <div><button type="button" onClick={() => changeStudy(-1)} aria-label="Previous component">‹</button><b>{MOTION_PARTS.findIndex((part) => part.id === studyPartId) + 1} / {MOTION_PARTS.length}</b><button type="button" onClick={() => changeStudy(1)} aria-label="Next component">›</button></div>
           </div>
         )}
+        {studyPartId === 'engine' && (
+          <div className="motion-cylinder-summary" aria-hidden="true">
+            <span>Why four cylinders?</span>
+            <strong>One power event every 180°</strong>
+            <div>{FOUR_CYLINDER_EVENTS.map((angle) => <i key={angle}>{angle}°</i>)}</div>
+            <p>Each cylinder fires once per 720°. Staggering four pushes makes crankshaft torque much steadier.</p>
+            <b>≈ {(Math.max(0, vehicle.rpm) * 4 / 120).toFixed(0)} events/s at {vehicle.rpm.toFixed(0)} rpm</b>
+          </div>
+        )}
         {webglLost ? <RenderFallback onRetry={retryRenderer} /> : (
           <Canvas key={rendererKey} camera={{ position: [6.8, 4.6, 7.4], fov: 40 }} shadows dpr={[1, 1.35]}
             style={{ cursor: !studyPartId && hoveredPart ? 'pointer' : 'grab' }} onCreated={rendererReady} fallback={<RenderFallback onRetry={retryRenderer} />}>
@@ -290,6 +322,7 @@ export default function MotionLab() {
           {studyPartId && (
             <>
               <div className="motion-study-steps">{activePart.studyFlow.map((item, index) => <span key={item}><b>{index + 1}</b>{item}</span>)}</div>
+              {studyPartId === 'engine' && <CylinderCountLesson rpm={vehicle.rpm} />}
               <div className="motion-internals"><strong>Parts separated in this study</strong><ul>{activePart.internals.map((item) => <li key={item}>{item}</li>)}</ul></div>
               {studyPartId === 'engine' && <a className="motion-engine-link" href="#engine">Open the full Engine Mechanics lab →</a>}
             </>

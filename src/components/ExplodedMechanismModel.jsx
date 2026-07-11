@@ -272,6 +272,8 @@ function EngineStudy({ rpm }) {
         detail="Combustion pressure pushes the piston; rings seal the chamber, control oil, and transfer heat into the cylinder wall.">PISTON + RINGS</StudyLabel>
       <StudyLabel position={[1.0, -.25, 0]} color={COLORS.power}
         detail="Carries alternating compression and tension between piston and offset crankpin, converting linear piston motion into crank rotation.">CONNECTING ROD</StudyLabel>
+      <StudyLabel position={[-1.65, -1.28, 0]} color={COLORS.burn} tooltipSide="above"
+        detail="This rig isolates one cylinder. In an evenly fired four-cylinder, each cylinder has one power stroke per 720° cycle, staggered so the crank receives a new push every 180°.">ONE OF FOUR CYLINDERS</StudyLabel>
       <StudyLabel position={[0, -2.15, 0]} color={COLORS.powerDark} tooltipSide="above"
         detail="Crank throws convert rod force into torque; the flywheel smooths combustion pulses and passes rotation toward the coupling.">CRANKSHAFT + OUTPUT FLYWHEEL</StudyLabel>
     </group>
