@@ -157,6 +157,17 @@ export default function EngineLab() {
           )}
           <p className="body-copy">This inline-four model meters about <strong>{fuelPerCycleMg.toFixed(1)} mg per cylinder cycle</strong> at this setting. Real efficiency shifts constantly with speed, load, temperature, and engine design.</p>
         </section>
+
+        <section className="lesson-section">
+          <h2>How a turning shaft becomes forward motion</h2>
+          <FlowChain items={['Crankshaft', 'Clutch or converter', 'Gearbox', 'Differential', 'Driven tires']} />
+          <p className="body-copy body-copy--spaced">When a drive gear is selected and the coupling is engaged, the flywheel or flexplate carries crankshaft rotation into a clutch, torque converter, or launch clutch. The gearbox trades rotational speed for torque, and the final drive and differential route that torque to the driven wheels.</p>
+          <Equation caption="A smaller effective tire radius or more gear reduction produces more force at the road for a given engine torque. Gears trade speed for torque; they do not create energy.">
+            F<sub>road</sub> ≈ τ<sub>wheel</sub> ÷ r<sub>tire</sub>
+          </Equation>
+          <p className="body-copy">At each contact patch, the driven tire pushes backward on the road. Static friction from the road pushes forward on the tire—and therefore the whole car. If the requested force exceeds available grip, the tire spins instead of producing more acceleration.</p>
+          <Note>Front-, rear-, and all-wheel-drive cars route the shafts differently. The differential also lets the left and right wheels turn at different speeds in a corner.</Note>
+        </section>
         <a className="next-lab" href="#motion"><span>Next experiment</span><strong>Send that torque to the tires →</strong></a>
       </aside>
     </div>

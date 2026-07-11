@@ -131,16 +131,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 
 .engine-diagram { position: absolute; inset: 0; display: grid; place-items: center; padding: 64px 8px 58px; background: #f3e8d8; overflow: hidden; }
 .engine-diagram svg { width: 100%; height: 100%; display: block; }
-.diagram-car-silhouette { opacity: .7; }
-.diagram-car-body { fill: rgba(239,167,187,.15); stroke: #a96568; stroke-width: 3.5; stroke-linejoin: round; }
-.diagram-car-window { fill: rgba(63,154,157,.1); stroke: #7a9b9b; stroke-width: 2; stroke-linejoin: round; }
-.diagram-car-detail { fill: none; stroke: #b47070; stroke-width: 2; stroke-dasharray: 8 7; }
-.diagram-car-tire { fill: #f3e8d8; stroke: #625b58; stroke-width: 10; }
-.diagram-car-rim { fill: rgba(63,154,157,.14); stroke: #8a817b; stroke-width: 3; }
-.diagram-car-hub { fill: #b47070; stroke: #f3e8d8; stroke-width: 2; }
-.diagram-car-headlight { fill: rgba(242,195,72,.68); stroke: #9b741b; stroke-width: 2; }
-.diagram-car-tail-light { fill: rgba(230,84,63,.68); stroke: #a9443a; stroke-width: 2; }
-.diagram-orientation { fill: #796f68; font: 500 12px 'DM Mono', monospace; letter-spacing: .08em; }
+.diagram-schematic-note { fill: #796f68; font: 500 10px 'DM Mono', monospace; letter-spacing: .08em; }
 .diagram-material-key text { fill: #5f7174; font: 600 10px 'DM Mono', monospace; }
 .diagram-material-key .is-fuel { fill: #ffd957; stroke: #9b741b; stroke-width: 1.5; }
 .diagram-material-key .is-air { fill: #d7f1ef; stroke: #28778c; stroke-width: 1.5; }
@@ -167,6 +158,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .diagram-label--exhaust text { fill: #8a6632; }
 .diagram-small-label { fill: #5f7174; font: 500 10px 'DM Mono', monospace; letter-spacing: .03em; }
 .diagram-tank { fill: #f2c348; stroke: #8e613a; stroke-width: 3; }
+.diagram-tank-title { fill: #704d2e; font: 700 12px 'DM Mono', monospace; letter-spacing: .04em; }
 .diagram-pump { fill: #e6543f; stroke: #fff8e9; stroke-width: 4; }
 .diagram-injector { fill: #f2c348; stroke: #8e613a; stroke-width: 2; }
 .diagram-cylinder { fill: rgba(255,250,241,.62); stroke: #75483f; stroke-width: 5; }
@@ -190,6 +182,25 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .diagram-crank { fill: rgba(118,86,155,.14); stroke: #76569b; stroke-width: 12; }
 .diagram-crank-arm { stroke: #76569b; stroke-width: 17; stroke-linecap: round; }
 .diagram-shaft { stroke: #65468b; stroke-width: 13; stroke-linecap: round; }
+.diagram-drivetrain { opacity: .92; transition: opacity .25s ease; }
+.diagram-power-link { fill: none; stroke: #76569b; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-drivetrain.is-driven .diagram-power-link { stroke: #e6543f; stroke-dasharray: 10 8; animation: diagram-power-flow .7s linear infinite; }
+@keyframes diagram-power-flow { to { stroke-dashoffset: -18; } }
+.diagram-coupling { fill: none; stroke: #76569b; stroke-width: 4; }
+.diagram-gearbox-shell { fill: #ede3f4; stroke: #65468b; stroke-width: 3; }
+.diagram-gear circle, .diagram-differential > circle:first-child { fill: #d8c8e8; stroke: #65468b; stroke-width: 4; }
+.diagram-gear path, .diagram-differential path { fill: none; stroke: #76569b; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-differential > circle:last-child { fill: #fff8e9; stroke: #65468b; stroke-width: 3; }
+.diagram-drivetrain-label { fill: #5f7174; font: 600 9px 'DM Mono', monospace; letter-spacing: .03em; }
+.diagram-drive-tire { fill: #f3e8d8; stroke: #304e54; stroke-width: 10; }
+.diagram-drive-rim { fill: #d9ecea; stroke: #76569b; stroke-width: 4; }
+.diagram-drive-spokes { fill: none; stroke: #76569b; stroke-width: 3; }
+.diagram-drive-hub { fill: #76569b; }
+.diagram-road { fill: none; stroke: #8e8177; stroke-width: 4; stroke-linecap: round; }
+.diagram-tire-push-label { fill: #a9443a; font: 600 8px 'DM Mono', monospace; letter-spacing: .02em; }
+.diagram-road-force { fill: none; stroke: #28778c; stroke-width: 7; stroke-linecap: round; }
+.diagram-road-force-label { fill: #28778c; font: 700 9px 'DM Mono', monospace; letter-spacing: .025em; }
+.engine-diagram--energy .diagram-drivetrain { opacity: .45; }
 .diagram-energy { opacity: 0; transition: opacity .25s ease; }
 .engine-diagram--energy .diagram-energy { opacity: 1; }
 .diagram-force { stroke: #e6543f; stroke-width: 8; stroke-linecap: round; }

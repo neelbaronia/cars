@@ -38,16 +38,27 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
     fuel: index % 3 === 0,
   }))
   const burnProgress = stroke === 2 && firing ? Math.min(1, within / 0.62) : 0
+  const shaftDegrees = progress * 180
+  const wheelDegrees = progress * 78
 
   return (
     <div className={`engine-diagram engine-diagram--${mode}`}>
-      <svg viewBox="0 0 900 650" role="img" aria-label="Animated cutaway showing the fuel path, four-stroke cylinder, piston, connecting rod, crankshaft, and exhaust path">
+      <svg viewBox="0 0 900 650" role="img" aria-label="Animated schematic showing the fuel path, four-stroke cylinder, crankshaft, drivetrain, driven wheel, and forward road force">
         <defs>
           <marker id="diagram-arrow-coral" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="#e6543f" />
           </marker>
           <marker id="diagram-arrow-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="#76569b" />
+          </marker>
+          <marker id="diagram-arrow-violet-small" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#76569b" />
+          </marker>
+          <marker id="diagram-arrow-coral-small" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#e6543f" />
+          </marker>
+          <marker id="diagram-arrow-teal-small" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#28778c" />
           </marker>
           <pattern id="paper-grid" width="42" height="42" patternUnits="userSpaceOnUse">
             <path d="M42 0H0V42" fill="none" stroke="#3f9a9d" strokeOpacity=".12" strokeWidth="1" />
@@ -65,26 +76,7 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
 
         <rect width="900" height="650" fill="#f3e8d8" />
         <rect width="900" height="650" fill="url(#paper-grid)" />
-        <g className="diagram-car-silhouette" aria-hidden="true">
-          <path className="diagram-car-body" d="M55 477 65 415Q70 376 107 365l223-53 80-132q16-29 45-29h115q32 2 51 27l69 138 90 21q38 8 52 44l14 50q7 26-15 42l-41 12q-5-52-52-78t-91 0q-35 22-39 78H282q-5-52-52-78t-91 0q-35 22-40 78H73q-21 0-18-8Z" />
-          <path className="diagram-car-window" d="M432 170h72v136H355l63-111q7-17 14-25Z" />
-          <path className="diagram-car-window" d="M520 170h46q22 2 35 25l57 111H520Z" />
-          <path className="diagram-car-detail" d="M505 170v136m15 17h144m-325 0H111m646 28 65 17M65 415l46-4" />
-          <g className="diagram-car-wheel" transform="translate(190 485)">
-            <circle r="52" className="diagram-car-tire" />
-            <circle r="27" className="diagram-car-rim" />
-            <circle r="7" className="diagram-car-hub" />
-          </g>
-          <g className="diagram-car-wheel" transform="translate(700 485)">
-            <circle r="52" className="diagram-car-tire" />
-            <circle r="27" className="diagram-car-rim" />
-            <circle r="7" className="diagram-car-hub" />
-          </g>
-          <path className="diagram-car-headlight" d="M70 392h22l-6 20H65" />
-          <path className="diagram-car-tail-light" d="M810 364h17l8 25-20-4Z" />
-        </g>
-        <text className="diagram-orientation" x="66" y="558">← FRONT / ENGINE BAY</text>
-        <text className="diagram-orientation" x="715" y="558">REAR →</text>
+        <text className="diagram-schematic-note" x="72" y="104">MECHANICAL SCHEMATIC · COMPONENTS NOT TO SCALE</text>
         <g className="diagram-material-key" transform="translate(610 145)">
           <circle cx="0" cy="0" r="6" className="is-fuel" /><text x="12" y="4">FUEL</text>
           <circle cx="72" cy="0" r="6" className="is-air" /><text x="84" y="4">AIR</text>
@@ -104,9 +96,9 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
           <circle cx="671" cy="447" r="15" className="diagram-pump" />
           <text className="diagram-small-label" x="671" y="477" textAnchor="middle">PUMP</text>
           <DiagramLabel x={72} y={128} width={174} tone="air">AIR FILTER + THROTTLE</DiagramLabel>
-          <DiagramLabel x={642} y={510} width={160} tone="fuel">FUEL TANK</DiagramLabel>
           <DiagramLabel x={655} y={211} width={166} tone="exhaust">CATALYST → MUFFLER</DiagramLabel>
           <rect x="664" y="388" width="145" height="82" rx="11" className="diagram-tank" />
+          <text className="diagram-tank-title" x="736" y="434" textAnchor="middle">FUEL TANK</text>
           <path d="M454 176 l-14 23 h28z" className="diagram-injector" />
           <text className="diagram-small-label" x="482" y="176">PORT INJECTOR</text>
           {fuelFlowing && (
@@ -162,6 +154,43 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
           <circle cx={crankPin.x} cy={crankPin.y} r="11" className="diagram-pin" />
           <line x1="300" y1={crankCenter.y} x2="536" y2={crankCenter.y} className="diagram-shaft" />
           <text className="diagram-small-label" x="412" y="577" textAnchor="middle">CRANKSHAFT · TWO TURNS PER CYCLE</text>
+        </g>
+
+        <g className={`diagram-drivetrain ${burnProgress > 0 ? 'is-driven' : ''}`} role="group"
+          aria-label="Crankshaft torque passes through a coupling and gearbox, driveshaft, differential, axle, and driven wheels">
+          <text className="diagram-drivetrain-label" x="592" y="443" textAnchor="middle">COUPLING + GEARBOX</text>
+          <path className="diagram-power-link" d="M536 485H552" />
+          <path className="diagram-coupling" d="M550 466v38m9-38v38" />
+          <rect className="diagram-gearbox-shell" x="564" y="454" width="82" height="62" rx="8" />
+          <g className="diagram-gear" transform={`rotate(${shaftDegrees} 590 483)`}>
+            <circle cx="590" cy="483" r="18" /><path d="M590 465v36M572 483h36" />
+          </g>
+          <g className="diagram-gear" transform={`rotate(${-shaftDegrees * 1.28} 619 489)`}>
+            <circle cx="619" cy="489" r="13" /><path d="M619 476v26M606 489h26" />
+          </g>
+
+          <path className="diagram-power-link diagram-driveshaft" d="M646 489 688 524"
+            markerEnd={`url(#diagram-arrow-${burnProgress > 0 ? 'coral' : 'violet'}-small)`} />
+          <text className="diagram-drivetrain-label" x="653" y="542" textAnchor="middle">DRIVESHAFT</text>
+
+          <g className="diagram-differential" transform={`translate(718 535) rotate(${-wheelDegrees})`}>
+            <circle r="25" /><path d="M-15 0 0-15 15 0 0 15Z" /><circle r="6" />
+          </g>
+          <text className="diagram-drivetrain-label" x="718" y="579" textAnchor="middle">DIFFERENTIAL</text>
+          <path className="diagram-power-link diagram-axle" d="M743 535H790"
+            markerEnd={`url(#diagram-arrow-${burnProgress > 0 ? 'coral' : 'violet'}-small)`} />
+
+          <g className="diagram-drive-wheel" transform={`translate(832 535) rotate(${wheelDegrees})`}>
+            <circle className="diagram-drive-tire" r="40" />
+            <circle className="diagram-drive-rim" r="21" />
+            <path className="diagram-drive-spokes" d="M-20 0h40M0-20v40M-14-14l28 28M14-14l-28 28" />
+            <circle className="diagram-drive-hub" r="6" />
+          </g>
+          <text className="diagram-drivetrain-label" x="832" y="589" textAnchor="middle">DRIVEN WHEELS</text>
+          <path className="diagram-road" d="M774 579H890" />
+          <text className="diagram-tire-push-label" x="777" y="603" textAnchor="end">← TIRE PUSHES ROAD BACK</text>
+          <path className="diagram-road-force" d="M780 614H875" markerEnd="url(#diagram-arrow-teal-small)" />
+          <text className="diagram-road-force-label" x="875" y="635" textAnchor="end">ROAD PUSHES CAR FORWARD</text>
         </g>
 
         <g className="diagram-energy">
