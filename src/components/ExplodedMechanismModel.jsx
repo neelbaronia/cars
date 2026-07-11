@@ -19,7 +19,8 @@ const STUDY_GEAR_RATIOS = [0, 3.55, 2.19, 1.52, 1.16]
 function StudyLabel({ position, color = COLORS.ink, children, detail, tooltipSide = 'below' }) {
   const tooltipId = useId()
   return (
-    <Html position={position} center sprite distanceFactor={9} zIndexRange={[120, 0]} style={{ pointerEvents: 'auto' }}>
+    <Html position={position} center sprite distanceFactor={9} zIndexRange={[120, 0]}
+      wrapperClass="exploded-label-layer" style={{ pointerEvents: 'auto' }}>
       <button type="button" className="exploded-part-label" data-tooltip-side={tooltipSide}
         style={{ '--label-color': color }} aria-describedby={tooltipId}
         onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>

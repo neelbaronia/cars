@@ -399,11 +399,11 @@ export default function SimulatorLab() {
           <div className="control-pair"><label>Selector<Segmented label="Drive selector" value={driveMode} onChange={setDriveMode} options={['D', 'N', 'R']} /></label>
             <label>Camera<Segmented label="Camera" value={cameraMode} onChange={setCameraMode} options={[{ value: 'chase', label: 'Chase' }, { value: 'top', label: 'Top' }]} /></label></div>
           <Slider label="Exploded view" value={explodePercent} min={0} max={100} unit="%"
-            onChange={(value) => { setExplodePercent(value); if (value > 5 && focus === 'body') setFocus('all') }} accent="#76569b" />
+            onChange={setExplodePercent} accent="#76569b" />
           <div className="system-filter">
             <span>Trace a system</span>
             <Segmented label="X-ray system" value={focus} onChange={setFocus} options={[
-              { value: 'all', label: 'All traces' }, { value: 'fuel', label: 'Fuel' }, { value: 'power', label: 'Drivetrain' }, { value: 'brakes', label: 'Hydraulics' },
+              { value: 'body', label: 'None' }, { value: 'all', label: 'All traces' }, { value: 'fuel', label: 'Fuel' }, { value: 'power', label: 'Drivetrain' }, { value: 'brakes', label: 'Hydraulics' },
               { value: 'steering', label: 'Steering' }, { value: 'suspension', label: 'Suspension' }, { value: 'forces', label: 'Forces' },
             ]} />
           </div>
