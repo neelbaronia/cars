@@ -1,11 +1,13 @@
 import { OrbitControls, useCursor } from '@react-three/drei'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
+import * as THREE from 'three'
 import { MotionDrivetrainModel } from '../components/MotionDrivetrainModel.jsx'
 import { RenderFallback, ResetButton, SceneBadge, SectionHeader, Segmented, Slider } from '../components/LabUI.jsx'
 import { ForceArrow, StudioFloor, StudioLights } from '../components/SceneKit.jsx'
 import { MOTION_PARTS } from '../motionParts.js'
 import { drivetrainOutput, engineOutput, getGearRatio, stepVehicle } from '../physics.js'
+import { usePerspectiveInput } from '../usePerspectiveInput.js'
 
 const INITIAL = { speed: 0, rpm: 850, heading: 0, x: 0, z: 0, gear: 1, mass: 1450, wheelRadius: 0.31, wheelbase: 2.7 }
 const PART_BY_ID = Object.fromEntries(MOTION_PARTS.map((part) => [part.id, part]))
@@ -30,10 +32,37 @@ function MovingRoadMarks({ speed }) {
   )
 }
 
-function MotionScene({ speed, rpm, throttle, gear, roadForce, activePart, hoveredPart, onHover, onSelect }) {
+function MotionScene({ speed, rpm, throttle, gear, roadForce, activePart, hoveredPart, onHover, onSelect, perspectiveInputRef, viewResetSignal }) {
+  const { camera } = useThree()
+  const controls = useRef()
+  const cameraTarget = useRef(new THREE.Vector3(0, -0.05, 0))
+  const spherical = useRef(new THREE.Spherical())
   useCursor(Boolean(hoveredPart))
   const forceLength = Math.min(2.5, Math.max(0, roadForce) / 2200)
   const showForce = forceLength > 0.08
+
+  useEffect(() => {
+    camera.position.set(6.8, 4.6, 7.4)
+    camera.lookAt(cameraTarget.current)
+    if (controls.current) {
+      controls.current.target.copy(cameraTarget.current)
+      controls.current.update()
+    }
+  }, [camera, viewResetSignal])
+
+  useFrame((_, delta) => {
+    const input = perspectiveInputRef.current
+    const horizontal = (input.right ? 1 : 0) - (input.left ? 1 : 0)
+    const vertical = (input.down ? 1 : 0) - (input.up ? 1 : 0)
+    if (horizontal === 0 && vertical === 0) return
+    const offset = camera.position.clone().sub(cameraTarget.current)
+    spherical.current.setFromVector3(offset)
+    spherical.current.theta += horizontal * delta * 1.25
+    spherical.current.phi = THREE.MathUtils.clamp(spherical.current.phi + vertical * delta * 0.9, 0.36, 1.38)
+    camera.position.copy(cameraTarget.current).add(offset.setFromSpherical(spherical.current))
+    camera.lookAt(cameraTarget.current)
+    controls.current?.update()
+  })
 
   return (
     <>
@@ -51,13 +80,14 @@ function MotionScene({ speed, rpm, throttle, gear, roadForce, activePart, hovere
             color="#e6543f" label="TIRE PUSHES ROAD BACK" />
         </>
       )}
-      <OrbitControls makeDefault enablePan={false} minDistance={6.7} maxDistance={10.5} target={[0, -0.05, 0]}
+      <OrbitControls ref={controls} makeDefault enablePan={false} minDistance={6.7} maxDistance={15} target={[0, -0.05, 0]}
         minPolarAngle={0.48} maxPolarAngle={Math.PI * 0.46} minAzimuthAngle={-0.25} maxAzimuthAngle={1.35} />
     </>
   )
 }
 
 export default function MotionLab() {
+  const { perspectiveInputRef, releasePerspective } = usePerspectiveInput()
   const [throttle, setThrottle] = useState(42)
   const [gear, setGear] = useState(1)
   const [vehicle, setVehicle] = useState(() => stepVehicle(INITIAL, { throttle: 0.42, gear: 1 }, 0))
@@ -65,6 +95,7 @@ export default function MotionLab() {
   const [selectedPart, setSelectedPart] = useState('engine')
   const [webglLost, setWebglLost] = useState(false)
   const [rendererKey, setRendererKey] = useState(0)
+  const [viewResetSignal, setViewResetSignal] = useState(0)
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -99,6 +130,8 @@ export default function MotionLab() {
     setGear(1)
     setHoveredPart(null)
     setSelectedPart('engine')
+    releasePerspective()
+    setViewResetSignal((value) => value + 1)
     setVehicle(stepVehicle(INITIAL, { throttle: 0.42, gear: 1 }, 0))
   }
   const chooseGear = (value) => { setGear(value); setSelectedPart('gearbox') }
@@ -114,13 +147,13 @@ export default function MotionLab() {
     <div className="lab-layout lab-layout--cake-box motion-focus-layout">
       <section className="demo-pane demo-pane--motion" aria-label="Hoverable drivetrain showing how engine torque becomes road force">
         <div className="scene-toolbar"><SceneBadge>{speedKph.toFixed(0)} km/h · gear {gear === 0 ? 'N' : gear}</SceneBadge><ResetButton onClick={reset} /></div>
-        <p className="motion-scene-help">Hover a numbered part · click or tap to pin it · drag to orbit</p>
+        <p className="motion-scene-help">Hover a part · click to pin · drag or use ← → to orbit · ↑ ↓ changes height</p>
         {webglLost ? <RenderFallback onRetry={retryRenderer} /> : (
           <Canvas key={rendererKey} camera={{ position: [6.8, 4.6, 7.4], fov: 40 }} shadows dpr={[1, 1.35]}
             style={{ cursor: hoveredPart ? 'pointer' : 'grab' }} onCreated={rendererReady} fallback={<RenderFallback onRetry={retryRenderer} />}>
             <MotionScene speed={vehicle.speed} rpm={vehicle.rpm} throttle={throttle / 100} gear={gear}
               roadForce={drivetrain.tractionLimitedForce} activePart={activePartId} hoveredPart={hoveredPart}
-              onHover={setHoveredPart} onSelect={setSelectedPart} />
+              onHover={setHoveredPart} onSelect={setSelectedPart} perspectiveInputRef={perspectiveInputRef} viewResetSignal={viewResetSignal} />
           </Canvas>
         )}
 

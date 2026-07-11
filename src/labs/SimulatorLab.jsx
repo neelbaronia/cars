@@ -6,6 +6,7 @@ import { CarModel } from '../components/CarModel.jsx'
 import { Equation, FlowChain, Metric, Note, RenderFallback, ResetButton, SceneBadge, SectionHeader, Segmented, Slider } from '../components/LabUI.jsx'
 import { ForceArrow, StudioLights } from '../components/SceneKit.jsx'
 import { clamp, stepVehicle } from '../physics.js'
+import { usePerspectiveInput } from '../usePerspectiveInput.js'
 
 const INITIAL_TELEMETRY = {
   speed: 0, rpm: 850, gear: 1, fuel: 44, brakePressure: 0, steeringDeg: 0,
@@ -77,12 +78,15 @@ function TestTrack() {
   )
 }
 
-function DriveScene({ inputRef, displayTelemetry, driveMode, focus, explode, cameraMode, resetSignal, onTelemetry }) {
+function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode, focus, explode, cameraMode, resetSignal, onTelemetry, onCameraView }) {
   const { camera } = useThree()
   const car = useRef()
   const accumulator = useRef(0)
   const reportClock = useRef(0)
   const steeringVisual = useRef(0)
+  const cameraYaw = useRef(0)
+  const cameraElevationOffset = useRef(0)
+  const cameraReportClock = useRef(0)
   const state = useRef(initialSimulationState())
 
   useEffect(() => {
@@ -91,6 +95,12 @@ function DriveScene({ inputRef, displayTelemetry, driveMode, focus, explode, cam
     accumulator.current = 0
     reportClock.current = 0
   }, [resetSignal])
+
+  useEffect(() => {
+    cameraYaw.current = 0
+    cameraElevationOffset.current = 0
+    onCameraView({ yaw: 0, elevation: cameraMode === 'top' ? 81 : 28 })
+  }, [cameraMode, onCameraView, resetSignal])
 
   useFrame((_, frameDelta) => {
     const fixedStep = 1 / 120
@@ -156,11 +166,34 @@ function DriveScene({ inputRef, displayTelemetry, driveMode, focus, explode, cam
       car.current.rotation.z = clamp(-lateralAcceleration * 0.016, -0.11, 0.11)
     }
 
-    const desired = cameraMode === 'top'
-      ? position.clone().add(new THREE.Vector3(0, 17, -0.01))
-      : position.clone().addScaledVector(forward, -9.2).add(new THREE.Vector3(0, 4.8, 0))
+    const cameraInput = perspectiveInputRef.current
+    const yawDirection = (cameraInput.right ? 1 : 0) - (cameraInput.left ? 1 : 0)
+    const elevationDirection = (cameraInput.up ? 1 : 0) - (cameraInput.down ? 1 : 0)
+    cameraYaw.current += yawDirection * frameDelta * 1.25
+    cameraYaw.current = cameraMode === 'top'
+      ? Math.atan2(Math.sin(cameraYaw.current), Math.cos(cameraYaw.current))
+      : clamp(cameraYaw.current, -1.31, 1.31)
+    cameraElevationOffset.current += elevationDirection * frameDelta * 0.72
+
+    const baseElevation = cameraMode === 'top' ? 1.42 : 0.48
+    const elevation = cameraMode === 'top'
+      ? clamp(baseElevation + cameraElevationOffset.current, 1.0, 1.52)
+      : clamp(baseElevation + cameraElevationOffset.current, 0.2, 1.15)
+    cameraElevationOffset.current = elevation - baseElevation
+    cameraReportClock.current += frameDelta
+    if ((yawDirection !== 0 || elevationDirection !== 0) && cameraReportClock.current > 0.08) {
+      onCameraView({ yaw: Math.round(cameraYaw.current * 180 / Math.PI), elevation: Math.round(elevation * 180 / Math.PI) })
+      cameraReportClock.current = 0
+    }
+    const cameraRadius = cameraMode === 'top' ? 17.5 : 10.4
+    const rear = forward.clone().negate()
+    const right = new THREE.Vector3(forward.z, 0, -forward.x)
+    const horizontal = rear.multiplyScalar(Math.cos(cameraYaw.current)).addScaledVector(right, Math.sin(cameraYaw.current))
+    const desired = position.clone()
+      .addScaledVector(horizontal, cameraRadius * Math.cos(elevation))
+      .add(new THREE.Vector3(0, cameraRadius * Math.sin(elevation), 0))
     camera.position.lerp(desired, 1 - Math.exp(-frameDelta * (cameraMode === 'top' ? 5 : 3.2)))
-    const target = position.clone().addScaledVector(forward, cameraMode === 'top' ? 0 : 3).add(new THREE.Vector3(0, 0.55, 0))
+    const target = position.clone().addScaledVector(forward, cameraMode === 'top' ? 0 : 1.5).add(new THREE.Vector3(0, 0.55, 0))
     camera.lookAt(target)
 
     reportClock.current += frameDelta
@@ -232,7 +265,7 @@ function useDriveInput() {
   }, [])
 
   useEffect(() => {
-    const keyMap = { w: 'gas', arrowup: 'gas', s: 'brake', arrowdown: 'brake', a: 'left', arrowleft: 'left', d: 'right', arrowright: 'right', ' ': 'handbrake' }
+    const keyMap = { w: 'gas', s: 'brake', a: 'left', d: 'right', ' ': 'handbrake' }
     const update = (event, active) => {
       const control = keyMap[event.key.toLowerCase()]
       if (!control) return
@@ -268,10 +301,12 @@ function useDriveInput() {
 
 export default function SimulatorLab() {
   const { inputRef, pressed, bind, releaseAll } = useDriveInput()
+  const { perspectiveInputRef, releasePerspective } = usePerspectiveInput()
   const [driveMode, setDriveMode] = useState('D')
   const [focus, setFocus] = useState('all')
   const [explodePercent, setExplodePercent] = useState(0)
   const [cameraMode, setCameraMode] = useState('chase')
+  const [cameraView, setCameraView] = useState({ yaw: 0, elevation: 28 })
   const [resetSignal, setResetSignal] = useState(0)
   const [telemetry, setTelemetry] = useState(INITIAL_TELEMETRY)
   const [webglLost, setWebglLost] = useState(false)
@@ -283,7 +318,9 @@ export default function SimulatorLab() {
 
   const reset = () => {
     releaseAll()
+    releasePerspective()
     setTelemetry(INITIAL_TELEMETRY)
+    setCameraView({ yaw: 0, elevation: 28 })
     setDriveMode('D'); setFocus('all'); setExplodePercent(0); setCameraMode('chase'); setResetSignal((value) => value + 1)
   }
   const retryRenderer = () => { setWebglLost(false); setRendererKey((value) => value + 1) }
@@ -303,11 +340,12 @@ export default function SimulatorLab() {
             { value: 'all', label: 'Drive' }, { value: 'power', label: 'Power' }, { value: 'brakes', label: 'Brakes' }, { value: 'steering', label: 'Steering' },
           ]} />
         </div>
+        <div className="sim-camera-hint"><span>← →</span> orbit <span>↑ ↓</span> height <b>{cameraView.yaw}° / {cameraView.elevation}°</b></div>
         {webglLost ? <RenderFallback onRetry={retryRenderer} /> : (
           <Canvas key={rendererKey} camera={{ position: [0, 4.8, -51], fov: 48 }} shadows dpr={[1, 1.35]}
             onCreated={rendererReady} fallback={<RenderFallback onRetry={retryRenderer} />}>
-            <DriveScene inputRef={inputRef} displayTelemetry={telemetry} driveMode={driveMode} focus={focus} explode={explodePercent / 100}
-              cameraMode={cameraMode} resetSignal={resetSignal} onTelemetry={setTelemetry} />
+            <DriveScene inputRef={inputRef} perspectiveInputRef={perspectiveInputRef} displayTelemetry={telemetry} driveMode={driveMode} focus={focus} explode={explodePercent / 100}
+              cameraMode={cameraMode} resetSignal={resetSignal} onTelemetry={setTelemetry} onCameraView={setCameraView} />
           </Canvas>
         )}
 
@@ -331,7 +369,7 @@ export default function SimulatorLab() {
           The exploded offsets are visual only: the same car physics continues underneath while fuel flows, shafts rotate, brake pressure builds, and steering links move.
         </SectionHeader>
 
-        <div className="drive-instruction"><kbd>W</kbd><span>gas</span><kbd>A</kbd><kbd>D</kbd><span>steer</span><kbd>S</kbd><span>brake</span><kbd>space</kbd><span>parking brake</span></div>
+        <div className="drive-instruction"><kbd>W</kbd><span>gas</span><kbd>A</kbd><kbd>D</kbd><span>steer</span><kbd>S</kbd><span>brake</span><kbd>space</kbd><span>parking brake</span><kbd>←</kbd><kbd>→</kbd><span>orbit</span><kbd>↑</kbd><kbd>↓</kbd><span>view height</span></div>
 
         <div className="control-group simulator-controls">
           <div className="group-title"><span>Driver + x-ray</span><small>Keyboard or scene buttons</small></div>

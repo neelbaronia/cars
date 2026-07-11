@@ -484,6 +484,9 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
 .drive-instruction { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 20px; color: #6b7473; font: 500 .59rem 'DM Mono', monospace; text-transform: uppercase; }
 .drive-instruction kbd { min-width: 28px; padding: 5px 6px; border: 1px solid #b8ab9d; border-bottom-width: 3px; border-radius: 3px; background: #fffaf0; color: #315964; font: inherit; text-align: center; }
 .drive-instruction span { margin-right: 6px; }
+.sim-camera-hint { position: absolute; z-index: 8; top: 69px; right: 20px; display: flex; align-items: center; gap: 6px; padding: 7px 9px; border: 1px solid rgba(49,89,100,.34); border-radius: 3px; background: rgba(255,249,235,.9); box-shadow: 2px 3px 0 rgba(46,62,68,.2); color: #586c70; font: 600 .5rem 'DM Mono', monospace; letter-spacing: .025em; text-transform: uppercase; pointer-events: none; }
+.sim-camera-hint span { padding: 2px 4px; border: 1px solid #b8ab9d; border-bottom-width: 2px; border-radius: 2px; background: #fffaf0; color: #315964; }
+.sim-camera-hint b { color: #76569b; font: 700 .5rem 'DM Mono', monospace; }
 .simulator-controls { gap: 20px; }
 .control-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .control-pair label { display: grid; gap: 7px; font-size: .68rem; font-weight: 700; }
@@ -545,6 +548,7 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
   .motion-torque-strip { right: 12px; bottom: 12px; left: 12px; grid-template-columns: repeat(3, 1fr); }
   .motion-torque-strip i { display: none; }
   .motion-lesson-pane .lesson-heading h1 { font-size: 1.72rem; }
+  .sim-camera-hint { top: 64px; right: 12px; }
 }
 
 @media (max-width: 460px) {
@@ -581,6 +585,7 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
   .motion-torque-strip b { font-size: .6rem; }
   .motion-part-inspector { padding: 14px; }
   .motion-lesson-pane .lesson-heading h1 { font-size: 1.6rem; }
+  .sim-camera-hint { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
