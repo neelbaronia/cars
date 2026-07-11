@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { CarFront, Sparkles } from 'lucide-react'
+import { CarFront, Github, Sparkles } from 'lucide-react'
 
 const EngineLab = lazy(() => import('./labs/EngineLab.jsx'))
 const MotionLab = lazy(() => import('./labs/MotionLab.jsx'))
@@ -50,10 +50,22 @@ export default function App() {
           <span><strong>HOW A CAR WORKS</strong><small>A hands-on mechanics studio</small></span>
         </a>
         <div className="header-note"><Sparkles size={16} /> Fuel · force · motion</div>
-        <a className="site-credit" href="https://www.nbaronia.com" target="_blank" rel="noreferrer">
-          <span>Made by</span>
-          <strong>nbaronia</strong>
-        </a>
+        <div className="header-links">
+          <a
+            className="source-link"
+            href="https://github.com/neelbaronia/cars"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="View the How a Car Works source code on GitHub"
+          >
+            <Github size={14} aria-hidden="true" />
+            <span>GitHub</span>
+          </a>
+          <a className="site-credit" href="https://www.nbaronia.com" target="_blank" rel="noreferrer">
+            <span>Made by</span>
+            <strong>nbaronia</strong>
+          </a>
+        </div>
       </header>
 
       <nav className="lab-tabs" aria-label="Car mechanics experiments">

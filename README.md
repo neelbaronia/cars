@@ -2,6 +2,8 @@
 
 An interactive, first-principles introduction to a gasoline car for curious learners. The site follows energy from a rear fuel tank through a four-stroke engine, transmission, tires, steering, suspension, and hydraulic brakes.
 
+**Live demo:** [cars.nbaronia.com](https://cars.nbaronia.com)
+
 The reference vehicle is a simplified front-engine, rear-wheel-drive automatic sedan. Real cars rearrange these systems, but the underlying mechanics are the same.
 
 ## The three labs
@@ -13,6 +15,8 @@ The reference vehicle is a simplified front-engine, rear-wheel-drive automatic s
 The simulations are intentionally approachable teaching models, not vehicle-engineering or safety tools.
 
 ## Run locally
+
+Requires Node.js 20 or newer.
 
 ```bash
 npm install

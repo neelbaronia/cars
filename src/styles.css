@@ -100,17 +100,26 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   letter-spacing: .04em;
   text-transform: uppercase;
 }
-.site-credit {
+.header-links {
   position: absolute;
   z-index: 1;
   right: 28px;
   display: inline-flex;
   align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+.source-link,
+.site-credit {
+  display: inline-flex;
+  align-items: center;
   gap: 5px;
-  color: var(--ink-soft);
   font: 500 .67rem 'DM Mono', monospace;
   text-decoration: none;
 }
+.source-link { color: var(--blue-deep); transition: color .18s ease; }
+.source-link:hover { color: var(--coral); }
+.site-credit { color: var(--ink-soft); }
 .site-credit::before {
   content: '';
   width: 7px;
@@ -767,13 +776,14 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
   .site-header { padding: 0 15px; }
   .header-note { display: none; }
   .brand { transform: translateY(-7px); }
-  .site-credit {
+  .header-links {
     right: auto;
     bottom: 7px;
     left: 50%;
-    font-size: .55rem;
+    gap: 10px;
     transform: translateX(-50%);
   }
+  .source-link, .site-credit { font-size: .55rem; }
   .site-credit::before { width: 5px; height: 5px; }
   .brand-mark { width: 36px; height: 36px; }
   .brand small { display: none; }
