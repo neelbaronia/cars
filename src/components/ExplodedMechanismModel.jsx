@@ -15,6 +15,15 @@ const ReducedMotionContext = createContext(false)
 const WHEEL_RADIUS = 0.31
 const VISUAL_ROTATION_SCALE = 0.35
 const STUDY_GEAR_RATIOS = [0, 3.55, 2.19, 1.52, 1.16]
+const METERING_RUNNER_ZS = [-.42, -.14, .14, .42]
+const METERING_AIR_PATH = [[-3, .45, 0], [-2.25, .45, 0], [-1.05, .45, 0], [.2, .42, 0]]
+const METERING_FUEL_RAIL_PATH = [[.82, 1.25, -.62], [.82, 1.25, .62]]
+const METERING_RUNNER_PATHS = METERING_RUNNER_ZS.map((z) => [
+  [.2, .42, z], [.55, .25, z], [1.45, .05, z], [1.88, -.03, z],
+])
+const METERING_INJECTOR_PATHS = METERING_RUNNER_ZS.map((z) => [
+  [.82, 1.2, z], [.86, .7, z], [.98, .25, z], [1.35, .07, z], [1.88, -.03, z],
+])
 
 function StudyLabel({ position, color = COLORS.ink, children, detail, tooltipSide = 'below' }) {
   const tooltipId = useId()
@@ -141,8 +150,7 @@ function MeteringStudy({ throttle, rpm }) {
   const reducedMotion = useContext(ReducedMotionContext)
   const engineRunning = rpm >= 200
   const effectiveThrottle = engineRunning ? Math.max(throttle, 0.045) : 0
-  const AIR_PATH = [[-3, .45, 0], [-2.25, .45, 0], [-1.05, .45, 0], [.2, .42, 0], [1.65, .2, 0]]
-  const FUEL_PATH = [[-.25, 1.25, -.72], [.55, 1.25, -.72], [.55, .62, -.3], [1.45, .35, 0]]
+  const flowSpeed = reducedMotion ? 0 : .24 + effectiveThrottle * 1.4
   return (
     <group>
       <ExplodedPiece from={[-1.3, .45, 0]} to={[-2.35, .45, 0]}>
@@ -151,14 +159,20 @@ function MeteringStudy({ throttle, rpm }) {
       <ExplodedPiece from={[-1.3, .45, 0]} to={[0, 0, 0]}><ThrottlePlate throttle={effectiveThrottle} /></ExplodedPiece>
       <ExplodedPiece from={[0, .42, 0]} to={[.25, .42, 0]}>
         <PaintedBox size={[1.15, .7, 1.25]} color="#8ccbd5" opacity={0.72} />
-        {[-.42, -.14, .14, .42].map((z) => <Shaft key={z} start={[.55, .25, z]} end={[1.45, .05, z]} color={COLORS.air} radius={.08} />)}
+        {METERING_RUNNER_ZS.map((z) => <Shaft key={z} start={[.55, .25, z]} end={[1.45, .05, z]} color={COLORS.air} radius={.08} />)}
       </ExplodedPiece>
       <ExplodedPiece from={[.4, .7, 0]} to={[0, .28, 0]}>
-        <Shaft start={[-.2, 1.25, -.72]} end={[1.15, 1.25, -.72]} color={COLORS.fuel} radius={.1} />
-        {[-.05, .32, .69, 1.06].map((x) => <Shaft key={x} start={[x, 1.18, -.72]} end={[x, .62, -.3]} color={COLORS.fuel} radius={.055} />)}
+        <Shaft start={[.82, 1.25, -.62]} end={[.82, 1.25, .62]} color={COLORS.fuel} radius={.1} />
+        {METERING_RUNNER_ZS.map((z) => <Shaft key={z} start={[.82, 1.18, z]} end={[.98, .25, z]} color={COLORS.fuel} radius={.055} />)}
       </ExplodedPiece>
-      <FlowDots points={AIR_PATH} color={COLORS.air} speed={reducedMotion ? 0 : .24 + effectiveThrottle * 1.4} count={11} active={engineRunning} radius={.05} />
-      <FlowDots points={FUEL_PATH} color={COLORS.fuel} speed={reducedMotion ? 0 : .2 + effectiveThrottle} count={7} active={engineRunning} radius={.045} />
+      <FlowDots points={METERING_AIR_PATH} color={COLORS.air} speed={flowSpeed} count={9} active={engineRunning} radius={.05} />
+      <FlowDots points={METERING_FUEL_RAIL_PATH} color={COLORS.fuel} speed={reducedMotion ? 0 : .18 + effectiveThrottle}
+        count={5} active={engineRunning} radius={.04} />
+      {METERING_RUNNER_PATHS.map((points, index) => <FlowDots key={`runner-air-${index}`} points={points} color={COLORS.air}
+        speed={flowSpeed} phase={index / METERING_RUNNER_PATHS.length} count={5} active={engineRunning} radius={.047} />)}
+      {METERING_INJECTOR_PATHS.map((points, index) => <FlowDots key={`runner-fuel-${index}`} points={points} color={COLORS.fuel}
+        speed={reducedMotion ? 0 : .2 + effectiveThrottle} phase={index / METERING_INJECTOR_PATHS.length} count={3}
+        active={engineRunning} radius={.039} />)}
 
       <group position={[0, -1.25, 0]}>
         <mesh position={[-.5, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
@@ -176,8 +190,8 @@ function MeteringStudy({ throttle, rpm }) {
       <StudyLabel position={[-1.05, 1.08, 0]} color="#28778c"
         detail="An electric actuator rotates the butterfly plate, changing airflow and therefore the torque the engine can produce.">BUTTERFLY + ACTUATOR</StudyLabel>
       <StudyLabel position={[.3, 1.02, .45]} color={COLORS.air}
-        detail="Divide metered air among the cylinders; their length and shape also influence cylinder filling at different engine speeds.">INTAKE RUNNERS</StudyLabel>
-      <StudyLabel position={[.62, 1.65, -.72]} color="#9b741b"
+        detail="Split the plenum’s metered air into four paths. Each cylinder’s intake stroke draws a pulse; its port injector adds the yellow fuel spray near the valve.">INTAKE RUNNERS</StudyLabel>
+      <StudyLabel position={[.82, 1.65, 0]} color="#9b741b"
         detail="The rail supplies pressurized fuel; electronically timed injectors spray measured pulses toward each cylinder’s intake valve.">FUEL RAIL + INJECTORS</StudyLabel>
       <StudyLabel position={[0, -2.02, 0]} color="#8a6632" tooltipSide="above"
         detail="Fast air through the venturi lowers pressure and draws fuel through calibrated jets, replacing electronic injection rather than supplementing it.">OLDER ALTERNATIVE · CARBURETOR VENTURI + JET</StudyLabel>

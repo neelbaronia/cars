@@ -49,13 +49,13 @@ export function ForceArrow({ from = [0, 0, 0], direction = [0, 1, 0], length = 2
   )
 }
 
-export function FlowDots({ points, color = '#f2c94d', speed = 1, count = 10, active = true, radius = 0.055 }) {
+export function FlowDots({ points, color = '#f2c94d', speed = 1, count = 10, active = true, radius = 0.055, phase = 0 }) {
   const refs = useRef([])
   const curve = useMemo(() => new THREE.CatmullRomCurve3(points.map((point) => new THREE.Vector3(...point))), [points])
   useFrame(({ clock }) => {
     refs.current.forEach((dot, index) => {
       if (!dot) return
-      const t = active ? (clock.elapsedTime * speed + index / count) % 1 : index / count
+      const t = active ? (clock.elapsedTime * speed + phase + index / count) % 1 : (phase + index / count) % 1
       dot.position.copy(curve.getPointAt(t))
       dot.visible = active
     })
