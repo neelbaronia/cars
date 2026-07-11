@@ -170,9 +170,7 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
     const yawDirection = (cameraInput.right ? 1 : 0) - (cameraInput.left ? 1 : 0)
     const elevationDirection = (cameraInput.up ? 1 : 0) - (cameraInput.down ? 1 : 0)
     cameraYaw.current += yawDirection * frameDelta * 1.25
-    cameraYaw.current = cameraMode === 'top'
-      ? Math.atan2(Math.sin(cameraYaw.current), Math.cos(cameraYaw.current))
-      : clamp(cameraYaw.current, -1.31, 1.31)
+    cameraYaw.current = Math.atan2(Math.sin(cameraYaw.current), Math.cos(cameraYaw.current))
     cameraElevationOffset.current += elevationDirection * frameDelta * 0.72
 
     const baseElevation = cameraMode === 'top' ? 1.42 : 0.48

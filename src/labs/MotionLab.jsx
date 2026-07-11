@@ -81,7 +81,7 @@ function MotionScene({ speed, rpm, throttle, gear, roadForce, activePart, hovere
         </>
       )}
       <OrbitControls ref={controls} makeDefault enablePan={false} minDistance={6.7} maxDistance={15} target={[0, -0.05, 0]}
-        minPolarAngle={0.48} maxPolarAngle={Math.PI * 0.46} minAzimuthAngle={-0.25} maxAzimuthAngle={1.35} />
+        minPolarAngle={0.48} maxPolarAngle={Math.PI * 0.46} />
     </>
   )
 }
