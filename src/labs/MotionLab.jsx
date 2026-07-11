@@ -228,7 +228,7 @@ export default function MotionLab() {
           <div ref={studyFocusRef} className="motion-study-toolbar" style={{ '--part-color': activePart.color }}
             tabIndex={-1} aria-label={`${activePart.name} exploded study controls`}>
             <button type="button" onClick={closeStudy}>← Whole drivetrain</button>
-            <span>{activePart.number} · Exploded study</span>
+            <span>{activePart.number} · Exploded study · hover ? to explain</span>
             <div><button type="button" onClick={() => changeStudy(-1)} aria-label="Previous component">‹</button><b>{MOTION_PARTS.findIndex((part) => part.id === studyPartId) + 1} / {MOTION_PARTS.length}</b><button type="button" onClick={() => changeStudy(1)} aria-label="Next component">›</button></div>
           </div>
         )}

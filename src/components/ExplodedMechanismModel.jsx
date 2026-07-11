@@ -1,9 +1,9 @@
-import { Edges } from '@react-three/drei'
+import { Edges, Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { FINAL_DRIVE_RATIO } from '../physics.js'
-import { FlowDots, ForceArrow, PaintedBox, PartLabel } from './SceneKit.jsx'
+import { FlowDots, ForceArrow, PaintedBox } from './SceneKit.jsx'
 
 const COLORS = {
   ink: '#304e54', air: '#3f9a9d', fuel: '#f2c348', burn: '#e6543f',
@@ -15,6 +15,20 @@ const ReducedMotionContext = createContext(false)
 const WHEEL_RADIUS = 0.31
 const VISUAL_ROTATION_SCALE = 0.35
 const STUDY_GEAR_RATIOS = [0, 3.55, 2.19, 1.52, 1.16]
+
+function StudyLabel({ position, color = COLORS.ink, children, detail, tooltipSide = 'below' }) {
+  const tooltipId = useId()
+  return (
+    <Html position={position} center sprite distanceFactor={9} zIndexRange={[120, 0]} style={{ pointerEvents: 'auto' }}>
+      <button type="button" className="exploded-part-label" data-tooltip-side={tooltipSide}
+        style={{ '--label-color': color }} aria-describedby={tooltipId}
+        onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
+        <span>{children}</span><i aria-hidden="true">?</i>
+        <span id={tooltipId} role="tooltip" className="exploded-part-tooltip">{detail}</span>
+      </button>
+    </Html>
+  )
+}
 
 function usePrefersReducedMotion() {
   const [reducedMotion, setReducedMotion] = useState(() => Boolean(
@@ -156,11 +170,16 @@ function MeteringStudy({ throttle, rpm }) {
         <Shaft start={[0, -.35, -.5]} end={[0, -.05, 0]} color={COLORS.fuel} radius={.045} />
       </group>
 
-      <PartLabel position={[-2.35, 1.15, 0]} color={COLORS.air}>AIR FILTER</PartLabel>
-      <PartLabel position={[-1.05, 1.08, 0]} color="#28778c">BUTTERFLY + ACTUATOR</PartLabel>
-      <PartLabel position={[.3, 1.02, .45]} color={COLORS.air}>INTAKE RUNNERS</PartLabel>
-      <PartLabel position={[.62, 1.65, -.72]} color="#9b741b">FUEL RAIL + INJECTORS</PartLabel>
-      <PartLabel position={[0, -2.02, 0]} color="#8a6632">OLDER ALTERNATIVE · CARBURETOR VENTURI + JET</PartLabel>
+      <StudyLabel position={[-2.35, 1.15, 0]} color={COLORS.air}
+        detail="Traps abrasive dust while allowing the engine to draw a clean, low-restriction stream of intake air.">AIR FILTER</StudyLabel>
+      <StudyLabel position={[-1.05, 1.08, 0]} color="#28778c"
+        detail="An electric actuator rotates the butterfly plate, changing airflow and therefore the torque the engine can produce.">BUTTERFLY + ACTUATOR</StudyLabel>
+      <StudyLabel position={[.3, 1.02, .45]} color={COLORS.air}
+        detail="Divide metered air among the cylinders; their length and shape also influence cylinder filling at different engine speeds.">INTAKE RUNNERS</StudyLabel>
+      <StudyLabel position={[.62, 1.65, -.72]} color="#9b741b"
+        detail="The rail supplies pressurized fuel; electronically timed injectors spray measured pulses toward each cylinder’s intake valve.">FUEL RAIL + INJECTORS</StudyLabel>
+      <StudyLabel position={[0, -2.02, 0]} color="#8a6632" tooltipSide="above"
+        detail="Fast air through the venturi lowers pressure and draws fuel through calibrated jets, replacing electronic injection rather than supplementing it.">OLDER ALTERNATIVE · CARBURETOR VENTURI + JET</StudyLabel>
     </group>
   )
 }
@@ -232,10 +251,14 @@ function EngineStudy({ rpm }) {
         <Shaft start={[-1.65, 0, 0]} end={[1.65, 0, 0]} color={COLORS.powerDark} radius={.12} />
         <RotatingDisc position={[1.72, 0, 0]} radius={.72} depth={.18} color={COLORS.power} phaseRef={phase} />
       </ExplodedPiece>
-      <PartLabel position={[0, 2.05, 0]} color="#9b741b">CYLINDER HEAD · VALVES · SPARK PLUG</PartLabel>
-      <PartLabel position={[-1.05, .55, 0]} color="#8e573d">PISTON + RINGS</PartLabel>
-      <PartLabel position={[1.0, -.25, 0]} color={COLORS.power}>CONNECTING ROD</PartLabel>
-      <PartLabel position={[0, -2.15, 0]} color={COLORS.powerDark}>CRANKSHAFT + OUTPUT FLYWHEEL</PartLabel>
+      <StudyLabel position={[0, 2.05, 0]} color="#9b741b"
+        detail="Timed valves control gas exchange, while the spark plug ignites the compressed air-fuel charge near top dead center.">CYLINDER HEAD · VALVES · SPARK PLUG</StudyLabel>
+      <StudyLabel position={[-1.05, .55, 0]} color="#8e573d"
+        detail="Combustion pressure pushes the piston; rings seal the chamber, control oil, and transfer heat into the cylinder wall.">PISTON + RINGS</StudyLabel>
+      <StudyLabel position={[1.0, -.25, 0]} color={COLORS.power}
+        detail="Carries alternating compression and tension between piston and offset crankpin, converting linear piston motion into crank rotation.">CONNECTING ROD</StudyLabel>
+      <StudyLabel position={[0, -2.15, 0]} color={COLORS.powerDark} tooltipSide="above"
+        detail="Crank throws convert rod force into torque; the flywheel smooths combustion pulses and passes rotation toward the coupling.">CRANKSHAFT + OUTPUT FLYWHEEL</StudyLabel>
     </group>
   )
 }
@@ -253,11 +276,16 @@ function CouplingStudy({ rpm, vehicleSpeed, gear }) {
       <ExplodedPiece from={[0, 0, 0]} to={[1.35, 0, 0]}><RotatingDisc position={[0, 0, 0]} radius={.9} depth={.16} color="#d8c8e8" speed={turbineSpeed} /></ExplodedPiece>
       <ExplodedPiece from={[0, 0, 0]} to={[2.2, 0, 0]}><Shaft start={[-.1, 0, 0]} end={[1.1, 0, 0]} color={COLORS.power} radius={.12} /></ExplodedPiece>
       <mesh rotation={[0, 0, Math.PI / 2]}><torusGeometry args={[1.22, .08, 12, 32]} /><meshStandardMaterial color="#b9a89c" transparent opacity={.35} /></mesh>
-      <PartLabel position={[-2.35, 1.4, 0]} color="#9b741b">FLEXPLATE · ENGINE INPUT</PartLabel>
-      <PartLabel position={[-1.18, 1.12, 0]} color={COLORS.burn}>IMPELLER MOVES FLUID</PartLabel>
-      <PartLabel position={[-.2, -1.25, 0]} color="#28778c">TURBINE + STATOR</PartLabel>
-      <PartLabel position={[1.35, 1.18, 0]} color={COLORS.power}>LOCK-UP CLUTCH</PartLabel>
-      <PartLabel position={[2.55, .55, 0]} color={COLORS.powerDark}>GEARBOX INPUT SHAFT</PartLabel>
+      <StudyLabel position={[-2.35, 1.4, 0]} color="#9b741b"
+        detail="Bolted to the crankshaft, the flexplate carries engine torque into the converter while tolerating slight alignment movement.">FLEXPLATE · ENGINE INPUT</StudyLabel>
+      <StudyLabel position={[-1.18, 1.12, 0]} color={COLORS.burn}
+        detail="Engine-driven impeller vanes accelerate transmission fluid outward, creating the moving fluid that transfers torque across the converter.">IMPELLER MOVES FLUID</StudyLabel>
+      <StudyLabel position={[-.2, -1.25, 0]} color="#28778c"
+        detail="Fluid drives the turbine; the stator redirects returning flow to increase launch torque before its one-way clutch overruns.">TURBINE + STATOR</StudyLabel>
+      <StudyLabel position={[1.35, 1.18, 0]} color={COLORS.power}
+        detail="Clamps the turbine to the converter cover during steady driving, eliminating fluid slip and improving efficiency.">LOCK-UP CLUTCH</StudyLabel>
+      <StudyLabel position={[2.55, .55, 0]} color={COLORS.powerDark}
+        detail="Receives turbine or lock-up-clutch torque and carries it into the transmission’s planetary gearsets.">GEARBOX INPUT SHAFT</StudyLabel>
     </group>
   )
 }
@@ -302,10 +330,18 @@ function GearboxStudy({ rpm, gear, vehicleSpeed }) {
         <RotatingDisc position={[-.55, 0, 0]} radius={.78} depth={.13} color={gear === 0 ? COLORS.metal : COLORS.burn} speed={outputSpeed} />
         <Shaft start={[-.45, 0, 0]} end={[1.15, 0, 0]} color={COLORS.powerDark} radius={.12} />
       </ExplodedPiece>
-      <PartLabel position={[-2.25, 1.25, 0]} color="#a9443a">HYDRAULIC CLUTCH PACKS</PartLabel>
-      <PartLabel position={[0, 1.35, 0]} color={COLORS.power}>SUN · PLANETS · RING</PartLabel>
-      <PartLabel position={[2.35, 1.05, 0]} color={gear === 0 ? COLORS.metal : COLORS.burn}>{gear === 0 ? 'NEUTRAL · OUTPUT OPEN' : `SELECTED RATIO · ${ratio.toFixed(2)}:1`}</PartLabel>
-      <PartLabel position={[2.5, -.8, 0]} color={COLORS.powerDark}>OUTPUT SHAFT</PartLabel>
+      <StudyLabel position={[-2.25, 1.25, 0]} color="#a9443a"
+        detail="Hydraulic pressure clamps alternating friction plates, coupling or holding selected planetary members to establish a gear ratio.">HYDRAULIC CLUTCH PACKS</StudyLabel>
+      <StudyLabel position={[0, 1.35, 0]} color={COLORS.power}
+        detail="Different combinations of driven, held, and output members trade rotational speed for torque through meshing planetary gears.">SUN · PLANETS · RING</StudyLabel>
+      <StudyLabel position={[2.35, 1.05, 0]} color={gear === 0 ? COLORS.metal : COLORS.burn}
+        detail={gear === 0
+          ? 'Released clutch packs interrupt the engine-to-output torque path, although downstream parts may keep rotating while the car coasts.'
+          : 'The applied clutch combination constrains planetary members, producing the displayed input-to-output speed and torque ratio.'}>
+        {gear === 0 ? 'NEUTRAL · OUTPUT OPEN' : `SELECTED RATIO · ${ratio.toFixed(2)}:1`}
+      </StudyLabel>
+      <StudyLabel position={[2.5, -.8, 0]} color={COLORS.powerDark}
+        detail="Carries the transmission’s selected speed and torque onward to the driveshaft.">OUTPUT SHAFT</StudyLabel>
     </group>
   )
 }
@@ -343,12 +379,18 @@ function DriveshaftStudy({ speed }) {
         <ExplodedPiece from={[0, 0, 0]} to={[1.82, 0, 0]}><UJoint position={[0, 0, 0]} /></ExplodedPiece>
         <ExplodedPiece from={[0, 0, 0]} to={[2.62, 0, 0]}><RotatingDisc position={[0, 0, 0]} radius={.62} depth={.18} color={COLORS.powerDark} speed={0} /></ExplodedPiece>
       </group>
-      <PartLabel position={[-2.65, 1.0, 0]} color={COLORS.powerDark}>GEARBOX FLANGE</PartLabel>
-      <PartLabel position={[-1.85, -1.0, 0]} color={COLORS.power}>UNIVERSAL JOINT</PartLabel>
-      <PartLabel position={[-.9, 1.0, 0]} color={COLORS.powerDark}>SLIDING SPLINE</PartLabel>
-      <PartLabel position={[.45, 1.0, 0]} color={COLORS.power}>HOLLOW TORQUE TUBE</PartLabel>
-      <PartLabel position={[1.82, -1.0, 0]} color={COLORS.power}>UNIVERSAL JOINT</PartLabel>
-      <PartLabel position={[2.62, 1.0, 0]} color={COLORS.powerDark}>PINION FLANGE</PartLabel>
+      <StudyLabel position={[-2.65, 1.0, 0]} color={COLORS.powerDark}
+        detail="A centered bolted joint connects the transmission output to the driveshaft and transfers torque without relative slip.">GEARBOX FLANGE</StudyLabel>
+      <StudyLabel position={[-1.85, -1.0, 0]} color={COLORS.power}
+        detail="Allows the rotating shafts to meet at an angle while continuing to transmit torque through the articulated cross.">UNIVERSAL JOINT</StudyLabel>
+      <StudyLabel position={[-.9, 1.0, 0]} color={COLORS.powerDark}
+        detail="Telescopes as driveline length changes with suspension movement while interlocking teeth continue transmitting torque.">SLIDING SPLINE</StudyLabel>
+      <StudyLabel position={[.45, 1.0, 0]} color={COLORS.power}
+        detail="The hollow driveshaft tube carries torsional load efficiently, providing high stiffness with less mass than a solid shaft.">HOLLOW TORQUE TUBE</StudyLabel>
+      <StudyLabel position={[1.82, -1.0, 0]} color={COLORS.power}
+        detail="Accommodates the pinion angle; correctly phased joint pairs minimize the speed variation created by each joint.">UNIVERSAL JOINT</StudyLabel>
+      <StudyLabel position={[2.62, 1.0, 0]} color={COLORS.powerDark}
+        detail="Bolts the rear universal joint to the differential’s drive pinion, completing the propshaft torque handoff.">PINION FLANGE</StudyLabel>
     </group>
   )
 }
@@ -378,11 +420,16 @@ function DifferentialStudy({ speed }) {
       </ExplodedPiece>
       <ExplodedPiece from={[0, 0, 0]} to={[-1.45, 0, 0]}><Shaft start={[-1.3, 0, 0]} end={[.55, 0, 0]} color={COLORS.powerDark} radius={.11} /></ExplodedPiece>
       <ExplodedPiece from={[0, 0, 0]} to={[1.45, 0, 0]}><Shaft start={[-.55, 0, 0]} end={[1.3, 0, 0]} color={COLORS.powerDark} radius={.11} /></ExplodedPiece>
-      <PartLabel position={[0, 1.65, -.95]} color="#9b741b">DRIVE PINION</PartLabel>
-      <PartLabel position={[0, 1.45, 0]} color={COLORS.power}>RING GEAR + CARRIER</PartLabel>
-      <PartLabel position={[0, -1.25, 0]} color="#9b741b">SPIDER + SIDE GEARS</PartLabel>
-      <PartLabel position={[-2.25, .65, 0]} color={COLORS.powerDark}>LEFT AXLE</PartLabel>
-      <PartLabel position={[2.25, .65, 0]} color={COLORS.powerDark}>RIGHT AXLE</PartLabel>
+      <StudyLabel position={[0, 1.65, -.95]} color="#9b741b"
+        detail="The small bevel pinion turns the larger ring gear through 90 degrees, reducing speed and multiplying torque.">DRIVE PINION</StudyLabel>
+      <StudyLabel position={[0, 1.45, 0]} color={COLORS.power}
+        detail="The ring gear is rigidly bolted to the carrier, so both rotate together at the final-drive output speed.">RING GEAR + CARRIER</StudyLabel>
+      <StudyLabel position={[0, -1.25, 0]} color="#9b741b"
+        detail="Permit left and right axle speeds to differ while an open differential delivers approximately equal torque to both sides.">SPIDER + SIDE GEARS</StudyLabel>
+      <StudyLabel position={[-2.25, .65, 0]} color={COLORS.powerDark}
+        detail="Carries torque from the left side gear to its wheel hub while rotating independently of the right axle.">LEFT AXLE</StudyLabel>
+      <StudyLabel position={[2.25, .65, 0]} color={COLORS.powerDark}
+        detail="Carries torque from the right side gear to its wheel hub while allowing a different cornering speed.">RIGHT AXLE</StudyLabel>
     </group>
   )
 }
@@ -429,11 +476,16 @@ function TiresStudy({ speed, roadForce }) {
           <ForceArrow from={[1.65, -1.17, 0]} direction={[0, 0, forceSign]} length={forceLength} color={COLORS.burn} label="TIRE PUSHES ROAD" />
         </>
       )}
-      <PartLabel position={[-2.4, .85, 0]} color={COLORS.powerDark}>AXLE + SPLINES</PartLabel>
-      <PartLabel position={[-1.25, .85, 0]} color={COLORS.metal}>HUB + BEARINGS</PartLabel>
-      <PartLabel position={[-.15, 1.08, 0]} color="#8a6632">WHEEL RIM</PartLabel>
-      <PartLabel position={[1.3, 1.62, 0]} color={COLORS.ink}>CARCASS · BELTS · TREAD</PartLabel>
-      <PartLabel position={[1.3, -1.78, 0]} color="#28778c">FLATTENED CONTACT PATCH</PartLabel>
+      <StudyLabel position={[-2.4, .85, 0]} color={COLORS.powerDark}
+        detail="Interlocking splines transfer axle torque into the hub without slipping while allowing the assembly to be serviced.">AXLE + SPLINES</StudyLabel>
+      <StudyLabel position={[-1.25, .85, 0]} color={COLORS.metal}
+        detail="The hub supports and centers the wheel; bearings carry vehicle loads while allowing low-friction rotation.">HUB + BEARINGS</StudyLabel>
+      <StudyLabel position={[-.15, 1.08, 0]} color="#8a6632"
+        detail="Bolts to the hub, retains the tire beads, and transmits hub torque into the tire carcass.">WHEEL RIM</StudyLabel>
+      <StudyLabel position={[1.3, 1.62, 0]} color={COLORS.ink}
+        detail="The carcass contains pressure and carries load, belts stabilize the tread, and tread rubber interacts with the road.">CARCASS · BELTS · TREAD</StudyLabel>
+      <StudyLabel position={[1.3, -1.78, 0]} color="#28778c" tooltipSide="above"
+        detail="Tire deformation creates a finite footprint where static friction transmits acceleration, braking, and cornering forces until grip is exceeded.">FLATTENED CONTACT PATCH</StudyLabel>
     </group>
   )
 }
