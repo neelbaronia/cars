@@ -2,7 +2,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Grid } from '@react-three/drei'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { CarModel } from '../components/CarModel.jsx'
+import { CAR_TIRE_EXPLODE_OFFSET, CarModel } from '../components/CarModel.jsx'
 import { Equation, FlowChain, Metric, Note, RenderFallback, ResetButton, SceneBadge, SectionHeader, Segmented, Slider } from '../components/LabUI.jsx'
 import { ForceArrow, StudioLights } from '../components/SceneKit.jsx'
 import { clamp, stepVehicle } from '../physics.js'
@@ -81,7 +81,7 @@ function TestTrack() {
   )
 }
 
-function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode, focus, explode, cameraMode, resetSignal, onTelemetry, onCameraView }) {
+function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode, focus, explode, commands, cameraMode, resetSignal, onTelemetry, onCameraView }) {
   const { camera } = useThree()
   const car = useRef()
   const accumulator = useRef(0)
@@ -187,7 +187,7 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
       onCameraView({ yaw: Math.round(cameraYaw.current * 180 / Math.PI), elevation: Math.round(elevation * 180 / Math.PI) })
       cameraReportClock.current = 0
     }
-    const cameraRadius = (cameraMode === 'top' ? 14.5 : 8.1) + explode * 1.8
+    const cameraRadius = (cameraMode === 'top' ? 11.8 : 8.1) + explode * (cameraMode === 'top' ? .8 : 1.4)
     const rear = forward.clone().negate()
     // With y up, forward × up is the driver's/camera's right-hand side.
     const right = new THREE.Vector3(-forward.z, 0, forward.x)
@@ -196,7 +196,7 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
       .addScaledVector(horizontal, cameraRadius * Math.cos(elevation))
       .add(new THREE.Vector3(0, cameraRadius * Math.sin(elevation), 0))
     camera.position.lerp(desired, 1 - Math.exp(-frameDelta * (cameraMode === 'top' ? 5 : 3.2)))
-    const target = position.clone().addScaledVector(forward, cameraMode === 'top' ? 0 : 1.5).add(new THREE.Vector3(0, 0.55, 0))
+    const target = position.clone().addScaledVector(forward, cameraMode === 'top' ? 0 : 1.5).add(new THREE.Vector3(0, .55 + explode * .24, 0))
     camera.lookAt(target)
 
     reportClock.current += frameDelta
@@ -232,12 +232,12 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
   const brakeArrowLength = Math.min(2.8, displayTelemetry.brakeForce / 4000)
   const dragArrowLength = Math.min(2.4, displayTelemetry.aeroDrag / 1000)
   const rollingArrowLength = Math.min(1.2, displayTelemetry.rollingResistance / 500)
-  const wheelX = 1.57 + explode * .9
+  const wheelX = 1.57 + explode * CAR_TIRE_EXPLODE_OFFSET
   const shellOpacity = focus === 'body'
-    ? THREE.MathUtils.lerp(.96, .24, explode)
-    : focus === 'all' || focus === 'drive'
-      ? THREE.MathUtils.lerp(.58, .14, explode)
-      : focus === 'forces' ? .76 : THREE.MathUtils.lerp(.2, .08, explode)
+    ? THREE.MathUtils.lerp(.96, .1, explode)
+    : focus === 'all' || focus === 'drive' || focus === 'live'
+      ? THREE.MathUtils.lerp(.54, .05, explode)
+      : focus === 'forces' ? THREE.MathUtils.lerp(.76, .18, explode) : THREE.MathUtils.lerp(.2, .04, explode)
   return (
     <>
       <color attach="background" args={['#87cad8']} />
@@ -250,7 +250,7 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
             throttle={displayTelemetry.appliedThrottle} rpm={displayTelemetry.rpm} gear={displayTelemetry.gear}
             brake={displayTelemetry.brakePressure / 90} parkingBrake={displayTelemetry.parkingBrake}
             steering={displayTelemetry.steeringDeg} speed={displayTelemetry.speed}
-            suspensionLoad={clamp(-displayTelemetry.acceleration / 7, -0.5, 1)} />
+            suspensionLoad={clamp(-displayTelemetry.acceleration / 7, -0.5, 1)} commands={commands} />
           {showForces && (
             <group>
               {driveArrowLength > .05 && [-wheelX, wheelX].map((x, index) => <ForceArrow key={`drive-${x}`} from={[x, -.6, 2.05]}
@@ -340,6 +340,12 @@ export default function SimulatorLab() {
   const gearLabel = telemetry.gear === 'N' && driveMode !== 'N' ? `${driveMode} WAIT` : driveMode === 'D' ? telemetry.gear : driveMode
   const displayedTorque = Math.abs(telemetry.engineTorque) < 0.5 ? 0 : telemetry.engineTorque
   const displayedDriveForce = Math.abs(telemetry.driveForce) < 5 ? 0 : telemetry.driveForce
+  const liveCommands = [
+    pressed.gas && { key: 'W', label: 'Accelerator', path: 'Air + fuel → engine → driveshaft → rear wheels', color: '#76569b' },
+    (pressed.left || pressed.right) && { key: pressed.left && pressed.right ? 'A + D' : pressed.left ? 'A' : 'D', label: 'Steering', path: 'Steering wheel → rack → tie rods → front wheels', color: '#2f9a96' },
+    pressed.brake && { key: 'S', label: 'Service brake', path: 'Pedal → master cylinder → fluid → four calipers', color: '#287f98' },
+    pressed.handbrake && { key: 'SPACE', label: 'Parking brake', path: 'Lever → rear brake mechanism → rear rotors', color: '#e6543f' },
+  ].filter(Boolean)
 
   const reset = () => {
     releaseAll()
@@ -362,14 +368,22 @@ export default function SimulatorLab() {
         <div className="scene-toolbar"><SceneBadge>{telemetry.status} · {speedKph.toFixed(0)} km/h</SceneBadge><ResetButton onClick={reset} /></div>
         <div className="scene-mode simulator-scene-mode">
           <Segmented label="Visible car system" value={focus} onChange={setFocus} options={[
-            { value: 'body', label: 'Exterior' }, { value: 'power', label: 'Drivetrain' }, { value: 'brakes', label: 'Brakes' }, { value: 'steering', label: 'Steering' },
+            { value: 'body', label: 'Exterior' }, { value: 'live', label: 'Live' }, { value: 'power', label: 'Drivetrain' }, { value: 'brakes', label: 'Brakes' }, { value: 'steering', label: 'Steering' },
           ]} />
         </div>
         <div className="sim-camera-hint"><span>← →</span> orbit <span>↑ ↓</span> height <b>{cameraView.yaw}° / {cameraView.elevation}°</b></div>
+        {explodePercent > 2 && (
+          <div className="sim-command-trace" aria-live="polite">
+            <header><span>Live mechanical response</span><small>{focus === 'live' ? 'Auto-highlighting is on' : 'Choose Live to highlight automatically'}</small></header>
+            {liveCommands.length > 0 ? liveCommands.map((command) => (
+              <div key={command.key} style={{ '--command-color': command.color }}><kbd>{command.key}</kbd><p><strong>{command.label}</strong><span>{command.path}</span></p></div>
+            )) : <p className="sim-command-idle">Hold W, A/D, S, or Space to watch that command travel through the exploded car.</p>}
+          </div>
+        )}
         {webglLost ? <RenderFallback onRetry={retryRenderer} /> : (
           <Canvas key={rendererKey} camera={{ position: [0, 4.8, -51], fov: 48 }} shadows dpr={[1, 1.35]}
             onCreated={rendererReady} fallback={<RenderFallback onRetry={retryRenderer} />}>
-            <DriveScene inputRef={inputRef} perspectiveInputRef={perspectiveInputRef} displayTelemetry={telemetry} driveMode={driveMode} focus={focus} explode={explodePercent / 100}
+            <DriveScene inputRef={inputRef} perspectiveInputRef={perspectiveInputRef} displayTelemetry={telemetry} driveMode={driveMode} focus={focus} explode={explodePercent / 100} commands={pressed}
               cameraMode={cameraMode} resetSignal={resetSignal} onTelemetry={setTelemetry} onCameraView={setCameraView} />
           </Canvas>
         )}
@@ -401,11 +415,12 @@ export default function SimulatorLab() {
           <div className="control-pair"><label>Selector<Segmented label="Drive selector" value={driveMode} onChange={setDriveMode} options={['D', 'N', 'R']} /></label>
             <label>Camera<Segmented label="Camera" value={cameraMode} onChange={setCameraMode} options={[{ value: 'chase', label: 'Chase' }, { value: 'top', label: 'Top' }]} /></label></div>
           <Slider label="Exploded view" value={explodePercent} min={0} max={100} unit="%"
-            onChange={setExplodePercent} accent="#76569b" />
+            onChange={setExplodePercent} accent="#76569b"
+            hint="Pulls the body, cabin, seats, wheels, and live systems apart without changing the driving physics." />
           <div className="system-filter">
             <span>Trace a system</span>
             <Segmented label="X-ray system" value={focus} onChange={setFocus} options={[
-              { value: 'body', label: 'None' }, { value: 'all', label: 'All traces' }, { value: 'fuel', label: 'Fuel' }, { value: 'power', label: 'Drivetrain' }, { value: 'brakes', label: 'Hydraulics' },
+              { value: 'body', label: 'None' }, { value: 'live', label: 'Live inputs' }, { value: 'all', label: 'All traces' }, { value: 'fuel', label: 'Fuel' }, { value: 'power', label: 'Drivetrain' }, { value: 'brakes', label: 'Hydraulics' },
               { value: 'steering', label: 'Steering' }, { value: 'suspension', label: 'Suspension' }, { value: 'forces', label: 'Forces' },
             ]} />
           </div>

@@ -548,12 +548,22 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
 .sim-camera-hint { position: absolute; z-index: 8; top: 69px; right: 20px; display: flex; align-items: center; gap: 6px; padding: 7px 9px; border: 1px solid rgba(49,89,100,.34); border-radius: 3px; background: rgba(255,249,235,.9); box-shadow: 2px 3px 0 rgba(46,62,68,.2); color: #586c70; font: 600 .5rem 'DM Mono', monospace; letter-spacing: .025em; text-transform: uppercase; pointer-events: none; }
 .sim-camera-hint span { padding: 2px 4px; border: 1px solid #b8ab9d; border-bottom-width: 2px; border-radius: 2px; background: #fffaf0; color: #315964; }
 .sim-camera-hint b { color: #76569b; font: 700 .5rem 'DM Mono', monospace; }
+.sim-command-trace { position: absolute; z-index: 8; top: 112px; right: 20px; width: 330px; display: grid; gap: 6px; padding: 10px; border: 1px solid rgba(49,89,100,.42); border-left: 5px solid #76569b; background: rgba(255,249,235,.96); box-shadow: 4px 5px 0 rgba(46,62,68,.2); pointer-events: none; }
+.sim-command-trace header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.sim-command-trace header span { color: #315964; font: 700 .55rem 'DM Mono', monospace; letter-spacing: .04em; text-transform: uppercase; }
+.sim-command-trace header small { color: #807770; font: 500 .47rem 'DM Mono', monospace; text-align: right; }
+.sim-command-trace > div { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; padding: 7px 8px; border-left: 4px solid var(--command-color); background: color-mix(in srgb, var(--command-color) 10%, #fffaf0); }
+.sim-command-trace kbd { min-width: 28px; padding: 4px 5px; border: 1px solid color-mix(in srgb, var(--command-color) 62%, #9d8d81); border-bottom-width: 3px; border-radius: 3px; background: #fffaf0; color: var(--command-color); font: 700 .52rem 'DM Mono', monospace; text-align: center; }
+.sim-command-trace > div p { display: grid; gap: 2px; margin: 0; }
+.sim-command-trace > div strong { color: #38545b; font-size: .61rem; }
+.sim-command-trace > div span { color: #667171; font: 500 .5rem/1.35 'DM Mono', monospace; }
+.sim-command-idle { margin: 0; padding: 8px 9px; background: rgba(118,86,155,.08); color: #657070; font-size: .61rem; line-height: 1.45; }
 .simulator-controls { gap: 20px; }
 .control-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .control-pair label { display: grid; gap: 7px; font-size: .68rem; font-weight: 700; }
 .control-pair .segmented button { padding-inline: 7px; }
 .system-filter { display: grid; gap: 8px; }
-.system-filter .segmented { grid-auto-flow: unset; grid-template-columns: repeat(4, 1fr); }
+.system-filter .segmented { grid-auto-flow: unset; grid-template-columns: repeat(3, 1fr); }
 .system-filter .segmented button { padding-inline: 4px; font-size: .57rem; }
 .grip-meter { display: grid; gap: 7px; margin-top: 15px; }
 .grip-meter > span { position: relative; height: 12px; border: 1px solid #9c8a7e; background: #e6ddd2; }
@@ -563,6 +573,7 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
 @media (max-width: 1180px) {
   .scene-mode { top: 60px; }
   .drive-controls { bottom: 126px; }
+  .sim-command-trace { width: 290px; }
 }
 
 @media (max-width: 980px) {
@@ -571,7 +582,7 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
   .lesson-heading h1 { font-size: 1.9rem; }
   .metric-grid--three { grid-template-columns: 1fr 1fr; }
   .scene-mode--four .segmented { min-width: 350px; }
-  .drive-controls { grid-template-columns: repeat(2, 48px); }
+  .drive-controls { grid-template-columns: repeat(4, 48px); }
   .drive-controls button { height: 42px; }
   .motion-scene-inspector { width: 245px; }
   .motion-study-toolbar { right: 12px; left: 12px; }
@@ -614,6 +625,7 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
   .motion-study-flow > span { display: none; }
   .motion-study-flow > b { padding: 7px 8px; }
   .motion-cylinder-summary { display: none; }
+  .sim-command-trace { display: none; }
   .motion-lesson-pane .lesson-heading h1 { font-size: 1.72rem; }
   .sim-camera-hint { top: 64px; right: 12px; }
 }

@@ -42,9 +42,18 @@ const CABIN_STATIONS = [
 ]
 const FRONT_AXLE_Z = -2.05
 const REAR_AXLE_Z = 2.05
+export const CAR_HUB_EXPLODE_OFFSET = 1.05
+export const CAR_TIRE_EXPLODE_OFFSET = 1.65
 
 function visibilityFor(focus, system) {
-  if (focus === 'all' || focus === 'drive') return .74
+  if (focus === 'all' || focus === 'drive') return .58
+  if (focus === 'live') return .14
+  return focus === system ? 1 : 0
+}
+
+function responsiveSystemOpacity(focus, system, active) {
+  if (focus === 'live') return active ? 1 : .12
+  if (focus === 'all' || focus === 'drive') return active ? 1 : .5
   return focus === system ? 1 : 0
 }
 
@@ -164,60 +173,60 @@ function WheelArch({ side, z, opacity }) {
   return <Line points={points} color={COLORS.bodyDark} lineWidth={5} transparent opacity={opacity} />
 }
 
-function BodyShell({ opacity = 1, explode = 0 }) {
-  const glassOpacity = Math.min(.5, .11 + opacity * .46)
-  const doorOffset = explode * .72
+function BodyShell({ opacity = 1, panelOpacity = opacity, explode = 0 }) {
+  const glassOpacity = Math.min(.5, .11 + panelOpacity * .46)
+  const doorOffset = explode * 1.35
   return (
     <group>
       <LoftMesh stations={BODY_STATIONS} color={COLORS.body} opacity={opacity} />
 
-      <group position={[0, explode * .7, 0]}>
+      <group position={[0, explode * 1.35, explode * .22]}>
         <LoftMesh stations={CABIN_STATIONS} color={COLORS.glass} opacity={glassOpacity} edge={COLORS.glassDark} renderOrder={1} />
-        <RoundedPiece size={[2.28, .13, 1.17]} position={[0, 1.49, .2]} color={COLORS.bodyDark} opacity={opacity} radius={.1} />
+        <RoundedPiece size={[2.28, .13, 1.17]} position={[0, 1.49, .2]} color={COLORS.bodyDark} opacity={panelOpacity} radius={.1} />
         {[-1, 1].map((side) => (
           <group key={side}>
-            <Tube start={[side * 1.33, .71, -1]} end={[side * 1.14, 1.49, -.36]} color={COLORS.bodyDark} radius={.055} opacity={opacity} />
-            <Tube start={[side * 1.14, 1.49, -.36]} end={[side * 1.13, 1.49, .75]} color={COLORS.bodyDark} radius={.055} opacity={opacity} />
-            <Tube start={[side * 1.13, 1.49, .75]} end={[side * 1.33, .71, 1.36]} color={COLORS.bodyDark} radius={.055} opacity={opacity} />
-            <Tube start={[side * 1.23, .72, .18]} end={[side * 1.16, 1.48, .18]} color={COLORS.bodyDark} radius={.05} opacity={opacity} />
+            <Tube start={[side * 1.33, .71, -1]} end={[side * 1.14, 1.49, -.36]} color={COLORS.bodyDark} radius={.055} opacity={panelOpacity} />
+            <Tube start={[side * 1.14, 1.49, -.36]} end={[side * 1.13, 1.49, .75]} color={COLORS.bodyDark} radius={.055} opacity={panelOpacity} />
+            <Tube start={[side * 1.13, 1.49, .75]} end={[side * 1.33, .71, 1.36]} color={COLORS.bodyDark} radius={.055} opacity={panelOpacity} />
+            <Tube start={[side * 1.23, .72, .18]} end={[side * 1.16, 1.48, .18]} color={COLORS.bodyDark} radius={.05} opacity={panelOpacity} />
           </group>
         ))}
       </group>
 
-      <group position={[0, explode * .48, -explode * .32]} rotation={[-explode * .08, 0, 0]}>
+      <group position={[0, explode * 1.05, -explode * .8]} rotation={[-explode * .16, 0, 0]}>
         <RoundedPiece size={[2.82, .12, 1.52]} position={[0, .74, -1.8]} rotation={[-.035, 0, 0]}
-          color={COLORS.bodyLight} opacity={opacity} radius={.07} />
+          color={COLORS.bodyLight} opacity={panelOpacity} radius={.07} />
       </group>
-      <group position={[0, explode * .4, explode * .26]} rotation={[explode * .06, 0, 0]}>
+      <group position={[0, explode * .9, explode * .72]} rotation={[explode * .12, 0, 0]}>
         <RoundedPiece size={[2.8, .12, 1.04]} position={[0, .68, 1.93]} rotation={[.025, 0, 0]}
-          color={COLORS.bodyLight} opacity={opacity} radius={.07} />
+          color={COLORS.bodyLight} opacity={panelOpacity} radius={.07} />
       </group>
 
       {[-1, 1].map((side) => (
         <group key={side}>
           <RoundedPiece size={[.08, .7, 1.55]} position={[side * (1.58 + doorOffset), .37, .18]}
-            color={COLORS.bodyLight} opacity={opacity} radius={.04} />
+            color={COLORS.bodyLight} opacity={panelOpacity} radius={.04} />
           <RoundedPiece size={[.1, .05, .3]} position={[side * (1.63 + doorOffset), .57, -.12]}
-            color={COLORS.cream} opacity={opacity} radius={.025} />
-          <RoundedPiece size={[.23, .16, .33]} position={[side * (1.68 + doorOffset * .6), .84 + explode * .18, -.72]}
-            color={COLORS.bodyDark} opacity={opacity} radius={.08} />
+            color={COLORS.cream} opacity={panelOpacity} radius={.025} />
+          <RoundedPiece size={[.23, .16, .33]} position={[side * (1.68 + doorOffset), .84 + explode * .28, -.72]}
+            color={COLORS.bodyDark} opacity={panelOpacity} radius={.08} />
           <WheelArch side={side} z={-2.05} opacity={opacity} />
           <WheelArch side={side} z={2.05} opacity={opacity} />
         </group>
       ))}
 
-      <RoundedPiece size={[2.82, .3, .28]} position={[0, .02, -2.78 - explode * .28]} color={COLORS.bodyDark} opacity={opacity} radius={.1} />
-      <RoundedPiece size={[2.82, .3, .28]} position={[0, .02, 2.74 + explode * .28]} color={COLORS.bodyDark} opacity={opacity} radius={.1} />
-      <RoundedPiece size={[1.08, .2, .06]} position={[0, .19, -2.94 - explode * .28]} color={COLORS.ink} opacity={opacity} radius={.04} />
+      <RoundedPiece size={[2.82, .3, .28]} position={[0, .02, -2.78 - explode * .62]} color={COLORS.bodyDark} opacity={panelOpacity} radius={.1} />
+      <RoundedPiece size={[2.82, .3, .28]} position={[0, .02, 2.74 + explode * .62]} color={COLORS.bodyDark} opacity={panelOpacity} radius={.1} />
+      <RoundedPiece size={[1.08, .2, .06]} position={[0, .19, -2.94 - explode * .62]} color={COLORS.ink} opacity={panelOpacity} radius={.04} />
       {[-.92, .92].map((x) => (
-        <RoundedPiece key={`head-${x}`} size={[.62, .23, .075]} position={[x, .38, -2.91 - explode * .28]}
-          color="#fff2a8" opacity={opacity} radius={.05} />
+        <RoundedPiece key={`head-${x}`} size={[.62, .23, .075]} position={[x, .38, -2.91 - explode * .62]}
+          color="#fff2a8" opacity={panelOpacity} radius={.05} />
       ))}
       {[-.94, .94].map((x) => (
-        <RoundedPiece key={`tail-${x}`} size={[.58, .22, .075]} position={[x, .36, 2.87 + explode * .28]}
-          color="#e6543f" opacity={opacity} radius={.05} />
+        <RoundedPiece key={`tail-${x}`} size={[.58, .22, .075]} position={[x, .36, 2.87 + explode * .62]}
+          color="#e6543f" opacity={panelOpacity} radius={.05} />
       ))}
-      <RoundedPiece size={[.58, .18, .04]} position={[0, .08, 2.9 + explode * .29]} color={COLORS.cream} opacity={opacity} radius={.025} />
+      <RoundedPiece size={[.58, .18, .04]} position={[0, .08, 2.9 + explode * .63]} color={COLORS.cream} opacity={panelOpacity} radius={.025} />
     </group>
   )
 }
@@ -234,36 +243,46 @@ function Seat({ x, z, opacity }) {
 function Wheel({ position, steer = 0, speed = 0, brake = 0, explode = 0, focus = 'all', front = false }) {
   const rotating = useRef()
   const side = Math.sign(position[0])
-  const explodedPosition = [position[0] + side * explode * .9, position[1], position[2]]
-  const wheelOpacity = focus === 'all' || focus === 'drive' || focus === 'body' ? 1
+  const explodedPosition = [position[0] + side * explode * CAR_HUB_EXPLODE_OFFSET, position[1], position[2]]
+  const tireOffset = side * explode * (CAR_TIRE_EXPLODE_OFFSET - CAR_HUB_EXPLODE_OFFSET)
+  const wheelOpacity = focus === 'all' || focus === 'drive' || focus === 'live' || focus === 'body' ? 1
     : focus === 'brakes' || focus === 'suspension' || (focus === 'steering' && front) || (focus === 'power' && !front) ? 1 : .34
+  const padGap = .045 + (1 - brake) * .075
+  const rotorX = side * -.1
+  const rotorHeat = brake * THREE.MathUtils.clamp(Math.abs(speed) / 3, 0, 1)
   useFrame((_, delta) => {
     if (rotating.current) rotating.current.rotation.x -= speed * delta / .31
   })
   return (
     <group position={explodedPosition} rotation={[0, front ? steer : 0, 0]}>
       <group ref={rotating}>
-        <mesh rotation={[0, Math.PI / 2, 0]} castShadow>
-          <torusGeometry args={[.34, .12, 14, 30]} />
-          <meshStandardMaterial color={COLORS.tire} roughness={.94} transparent={wheelOpacity < 1} opacity={wheelOpacity} />
-          <Edges color="#152427" />
-        </mesh>
-        <mesh rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[.24, .24, .13, 22]} />
-          <meshStandardMaterial color={COLORS.cream} roughness={.54} transparent={wheelOpacity < 1} opacity={wheelOpacity} />
-        </mesh>
-        {Array.from({ length: 5 }, (_, index) => (
-          <PaintedBox key={index} size={[.15, .045, .38]} rotation={[index / 5 * Math.PI * 2, 0, 0]}
-            color={COLORS.metal} opacity={wheelOpacity} />
-        ))}
-        <mesh rotation={[0, 0, Math.PI / 2]} position={[side * -.1, 0, 0]}>
+        <group position={[tireOffset, 0, 0]}>
+          <mesh rotation={[0, Math.PI / 2, 0]} castShadow>
+            <torusGeometry args={[.34, .12, 14, 30]} />
+            <meshStandardMaterial color={COLORS.tire} roughness={.94} transparent={wheelOpacity < 1} opacity={wheelOpacity} />
+            <Edges color="#152427" />
+          </mesh>
+          <mesh rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[.24, .24, .13, 22]} />
+            <meshStandardMaterial color={COLORS.cream} roughness={.54} transparent={wheelOpacity < 1} opacity={wheelOpacity} />
+          </mesh>
+          {Array.from({ length: 5 }, (_, index) => (
+            <PaintedBox key={index} size={[.15, .045, .38]} rotation={[index / 5 * Math.PI * 2, 0, 0]}
+              color={COLORS.metal} opacity={wheelOpacity} />
+          ))}
+        </group>
+        <mesh rotation={[0, 0, Math.PI / 2]} position={[rotorX, 0, 0]}>
           <cylinderGeometry args={[.29, .29, .05, 24]} />
-          <meshStandardMaterial color={brake > .6 ? '#ff765d' : '#c9b3a0'} emissive={COLORS.combustion} emissiveIntensity={brake * .65}
-            transparent opacity={Math.max(.16, visibilityFor(focus, 'brakes'))} />
+          <meshStandardMaterial color={rotorHeat > .6 ? '#ff765d' : '#c9b3a0'} emissive={COLORS.combustion} emissiveIntensity={rotorHeat * .65}
+            transparent opacity={Math.max(.16, brake, visibilityFor(focus, 'brakes'))} />
         </mesh>
       </group>
-      <RoundedPiece size={[.1, .32, .18]} position={[side * -.18, 0, 0]} color={COLORS.brakes}
-        opacity={Math.max(.1, visibilityFor(focus, 'brakes'))} radius={.03} />
+      {[-1, 1].map((direction) => (
+        <RoundedPiece key={direction} size={[.035, .28, .16]} position={[rotorX + direction * padGap, 0, 0]}
+          color={COLORS.brakes} opacity={Math.max(brake, visibilityFor(focus, 'brakes'))} radius={.025} />
+      ))}
+      <RoundedPiece size={[.1, .32, .18]} position={[rotorX, 0, 0]} color={COLORS.brakes}
+        opacity={Math.max(.1, brake, visibilityFor(focus, 'brakes'))} radius={.03} />
     </group>
   )
 }
@@ -282,10 +301,10 @@ function CoilSpring({ position, opacity = 1, compression = 0 }) {
   )
 }
 
-function EngineBlock({ throttle = 0, opacity = 1 }) {
+function EngineBlock({ throttle = 0, rpm = 850, opacity = 1 }) {
   const crank = useRef()
   useFrame((_, delta) => {
-    if (crank.current) crank.current.rotation.x -= delta * (2 + throttle * 10)
+    if (crank.current) crank.current.rotation.x -= delta * THREE.MathUtils.clamp(rpm / 850 * 2.2, 0, 14)
   })
   return (
     <group position={[0, .03, -1.72]}>
@@ -306,12 +325,27 @@ function EngineBlock({ throttle = 0, opacity = 1 }) {
   )
 }
 
-function SystemLabels({ focus, wheelX, gear }) {
-  if (focus === 'all' || focus === 'drive' || focus === 'body' || focus === 'forces') return null
-  if (focus === 'fuel') return <><PartLabel position={[0, .58, 2.02]} color="#9b741b">FUEL TANK</PartLabel><PartLabel position={[-.42, .9, -1.65]} color="#9b741b">FUEL RAIL + INJECTORS</PartLabel></>
-  if (focus === 'power') return <><PartLabel position={[0, 1.02, -1.72]} color={COLORS.power}>ENGINE</PartLabel><PartLabel position={[0, .55, -.58]} color={COLORS.power}>{gear === 'N' ? 'NEUTRAL · PATH OPEN' : 'TRANSMISSION'}</PartLabel><PartLabel position={[0, .55, 1.78]} color={COLORS.power}>DIFFERENTIAL</PartLabel></>
-  if (focus === 'brakes') return <><PartLabel position={[-.2, 1.28, -.56]} color={COLORS.brakes}>MASTER CYLINDER</PartLabel><PartLabel position={[-wheelX, .38, -2.48]} color={COLORS.brakes}>FRONT CALIPERS</PartLabel><PartLabel position={[wheelX, .42, 2.42]} color={COLORS.brakes}>REAR CALIPERS</PartLabel></>
-  if (focus === 'steering') return <><PartLabel position={[-.58, 1.42, -.18]} color={COLORS.steering}>STEERING WHEEL</PartLabel><PartLabel position={[0, .55, -1.88]} color={COLORS.steering}>RACK + TIE RODS</PartLabel></>
+function DriveShaft({ y = -.14, startZ = -.08, endZ = 1.55, speed = 0, opacity = 1 }) {
+  const spinner = useRef()
+  useFrame((_, delta) => {
+    if (spinner.current) spinner.current.rotation.z -= delta * THREE.MathUtils.clamp(Math.abs(speed) * 2.4, 0, 12)
+  })
+  return (
+    <group position={[0, y, 0]}>
+      <Tube start={[0, 0, startZ]} end={[0, 0, endZ]} color={COLORS.powerDark} radius={.09} opacity={opacity} xray />
+      <group ref={spinner}>
+        {[-.02, .7, 1.42].map((z) => <PaintedBox key={z} size={[.3, .045, .045]} position={[0, 0, z]} color={COLORS.cream} opacity={opacity} />)}
+      </group>
+    </group>
+  )
+}
+
+function SystemLabels({ focus, wheelX, gear, positions }) {
+  if (focus === 'all' || focus === 'drive' || focus === 'live' || focus === 'body' || focus === 'forces') return null
+  if (focus === 'fuel') return <><PartLabel position={positions.fuelTank} color="#9b741b">FUEL TANK</PartLabel><PartLabel position={positions.fuelRail} color="#9b741b">FUEL RAIL + INJECTORS</PartLabel></>
+  if (focus === 'power') return <><PartLabel position={positions.engine} color={COLORS.power}>ENGINE</PartLabel><PartLabel position={positions.transmission} color={COLORS.power}>{gear === 'N' ? 'NEUTRAL · PATH OPEN' : 'TRANSMISSION'}</PartLabel><PartLabel position={positions.differential} color={COLORS.power}>DIFFERENTIAL</PartLabel></>
+  if (focus === 'brakes') return <><PartLabel position={positions.masterCylinder} color={COLORS.brakes}>MASTER CYLINDER</PartLabel><PartLabel position={[-wheelX, .38, -2.48]} color={COLORS.brakes}>FRONT CALIPERS</PartLabel><PartLabel position={[wheelX, .42, 2.42]} color={COLORS.brakes}>REAR CALIPERS</PartLabel></>
+  if (focus === 'steering') return <><PartLabel position={positions.steeringWheel} color={COLORS.steering}>STEERING WHEEL</PartLabel><PartLabel position={positions.rack} color={COLORS.steering}>RACK + TIE RODS</PartLabel></>
   if (focus === 'suspension') return <><PartLabel position={[-wheelX, .72, -2.05]} color={COLORS.suspension}>SPRING + DAMPER</PartLabel><PartLabel position={[wheelX, .48, 2.05]} color={COLORS.suspension}>CONTROL ARM</PartLabel></>
   return null
 }
@@ -328,49 +362,86 @@ export function CarModel({
   speed = 0,
   bodyOpacity = .24,
   suspensionLoad = 0,
+  commands = {},
 }) {
-  const powerOpacity = visibilityFor(focus, 'power')
-  const fuelOpacity = visibilityFor(focus, 'fuel')
-  const brakeOpacity = visibilityFor(focus, 'brakes')
-  const steeringOpacity = visibilityFor(focus, 'steering')
-  const suspensionOpacity = visibilityFor(focus, 'suspension')
   const steerRadians = steering * Math.PI / 180
-  const wheelX = 1.57 + explode * .9
+  const wheelX = 1.57 + explode * CAR_HUB_EXPLODE_OFFSET
   const drivetrainConnected = gear !== 'N'
+  const gasActive = Boolean(commands.gas) || throttle > .02
+  const serviceBrakeActive = Boolean(commands.brake) || brake > .02
+  const parkingBrakeActive = Boolean(commands.handbrake) || parkingBrake > .02
+  const brakeActive = serviceBrakeActive || parkingBrakeActive
+  const steeringActive = Boolean(commands.left) || Boolean(commands.right) || Math.abs(steering) > .2
+  const suspensionActive = Math.abs(suspensionLoad) > .04 || brakeActive || gasActive || steeringActive
+  const powerActive = gasActive || Math.abs(speed) > .04
+  const powerOpacity = responsiveSystemOpacity(focus, 'power', powerActive)
+  const fuelOpacity = responsiveSystemOpacity(focus, 'fuel', gasActive)
+  const brakeOpacity = responsiveSystemOpacity(focus, 'brakes', brakeActive)
+  const steeringOpacity = responsiveSystemOpacity(focus, 'steering', steeringActive)
+  const suspensionOpacity = responsiveSystemOpacity(focus, 'suspension', suspensionActive)
+  const engineY = explode * .55
+  const engineZ = -1.72 - explode * .42
+  const transmissionY = explode * .2
+  const transmissionZ = -.62 - explode * .12
+  const shaftY = -.14 - explode * .24
+  const differentialY = -.13 + explode * .18
+  const differentialZ = 1.78 + explode * .5
+  const fuelTankY = -.08 + explode * .38
+  const fuelTankZ = 2.18 + explode * .62
+  const fuelPumpX = -.48 - explode * .28
+  const fuelPumpY = fuelTankY + .03
+  const fuelPumpZ = 1.5 + explode * .2
+  const masterX = -.56 - explode * .42
+  const masterY = .52 + explode * .42
+  const steeringWheelY = 1.02 + explode * .5
+  const steeringWheelZ = -.18 + explode * .12
+  const rackY = -.01 - explode * .12
+  const rackZ = -1.88 - explode * .4
+  const rackShift = steerRadians * .46
+  const panelOpacity = THREE.MathUtils.lerp(
+    bodyOpacity,
+    focus === 'body' ? .52 : focus === 'all' || focus === 'drive' || focus === 'live' ? .18 : .12,
+    explode,
+  )
 
-  const fuelPath = useMemo(() => [[0, -.08, 2.2], [-.5, -.08, 1.5], [-.58, -.05, -.65], [-.45, .55, -1.72]], [])
-  const powerInputPath = useMemo(() => [[0, -.08, -1.72], [0, -.12, -.92]], [])
+  const fuelPath = useMemo(() => [[0, fuelTankY, fuelTankZ], [fuelPumpX, fuelPumpY, fuelPumpZ], [-.58, -.05, -.65], [-.45, engineY + .55, engineZ]],
+    [engineY, engineZ, fuelPumpX, fuelPumpY, fuelPumpZ, fuelTankY, fuelTankZ])
+  const powerInputPath = useMemo(() => [[0, engineY - .08, engineZ], [0, transmissionY - .1, transmissionZ]], [engineY, engineZ, transmissionY, transmissionZ])
   const powerOutputPath = useMemo(() => {
-    const points = [[0, -.12, -.34], [0, -.15, .8], [0, -.13, 1.78]]
+    const points = [[0, transmissionY - .1, transmissionZ + .28], [0, shaftY, -.08], [0, shaftY, 1.55], [0, differentialY, differentialZ]]
     return drivetrainConnected ? points : [...points].reverse()
-  }, [drivetrainConnected])
+  }, [differentialY, differentialZ, drivetrainConnected, shaftY, transmissionY, transmissionZ])
   const powerLeftPath = useMemo(() => {
-    const points = [[0, -.13, 1.78], [-wheelX, -.13, REAR_AXLE_Z]]
+    const points = [[0, differentialY, differentialZ], [-wheelX, -.13, REAR_AXLE_Z]]
     return drivetrainConnected ? points : [...points].reverse()
-  }, [drivetrainConnected, wheelX])
+  }, [differentialY, differentialZ, drivetrainConnected, wheelX])
   const powerRightPath = useMemo(() => {
-    const points = [[0, -.13, 1.78], [wheelX, -.13, REAR_AXLE_Z]]
+    const points = [[0, differentialY, differentialZ], [wheelX, -.13, REAR_AXLE_Z]]
     return drivetrainConnected ? points : [...points].reverse()
-  }, [drivetrainConnected, wheelX])
+  }, [differentialY, differentialZ, drivetrainConnected, wheelX])
   const brakePaths = useMemo(() => [
-    [[-.56, .52, -.58], [-.7, -.08, -.5], [-.9, -.12, FRONT_AXLE_Z], [-wheelX, -.08, FRONT_AXLE_Z]],
-    [[-.56, .52, -.58], [.7, -.08, -.5], [.9, -.12, FRONT_AXLE_Z], [wheelX, -.08, FRONT_AXLE_Z]],
-    [[-.56, .52, -.58], [-.7, -.1, .25], [-.92, -.12, REAR_AXLE_Z], [-wheelX, -.08, REAR_AXLE_Z]],
-    [[-.56, .52, -.58], [.7, -.1, .25], [.92, -.12, REAR_AXLE_Z], [wheelX, -.08, REAR_AXLE_Z]],
-  ], [wheelX])
+    [[masterX, masterY, -.58], [-.7, -.08, -.5], [-.9, -.12, FRONT_AXLE_Z], [-wheelX, -.08, FRONT_AXLE_Z]],
+    [[masterX, masterY, -.58], [.7, -.08, -.5], [.9, -.12, FRONT_AXLE_Z], [wheelX, -.08, FRONT_AXLE_Z]],
+    [[masterX, masterY, -.58], [-.7, -.1, .25], [-.92, -.12, REAR_AXLE_Z], [-wheelX, -.08, REAR_AXLE_Z]],
+    [[masterX, masterY, -.58], [.7, -.1, .25], [.92, -.12, REAR_AXLE_Z], [wheelX, -.08, REAR_AXLE_Z]],
+  ], [masterX, masterY, wheelX])
   const steeringPaths = useMemo(() => [
-    [[-.58, .98, -.18], [-.58, .62, -.52], [0, .02, -1.88]],
-    [[0, .02, -1.88], [-wheelX, -.04, FRONT_AXLE_Z]],
-    [[0, .02, -1.88], [wheelX, -.04, FRONT_AXLE_Z]],
-  ], [wheelX])
+    [[-.58, steeringWheelY, steeringWheelZ], [-.58, .62, -.52], [rackShift, rackY, rackZ]],
+    [[rackShift - 1.02, rackY, rackZ], [-wheelX, -.04, FRONT_AXLE_Z]],
+    [[rackShift + 1.02, rackY, rackZ], [wheelX, -.04, FRONT_AXLE_Z]],
+  ], [rackShift, rackY, rackZ, steeringWheelY, steeringWheelZ, wheelX])
 
   return (
     <group>
-      <BodyShell opacity={bodyOpacity} explode={explode} />
+      <BodyShell opacity={bodyOpacity} panelOpacity={panelOpacity} explode={explode} />
 
-      <group>
+      <group position={[-explode * .34, explode * .86, -explode * .08]}>
         <Seat x={-.57} z={-.18} opacity={Math.min(.82, .28 + bodyOpacity)} />
+      </group>
+      <group position={[explode * .34, explode * .86, -explode * .08]}>
         <Seat x={.57} z={-.18} opacity={Math.min(.82, .28 + bodyOpacity)} />
+      </group>
+      <group position={[0, explode * .62, explode * .34]}>
         <Seat x={0} z={.72} opacity={Math.min(.72, .22 + bodyOpacity)} />
       </group>
 
@@ -381,45 +452,53 @@ export function CarModel({
       </group>
 
       <group visible={fuelOpacity > .02}>
-        <RoundedPiece size={[1.5, .46, .92]} position={[0, -.08, 2.18]} color={COLORS.fuel} opacity={fuelOpacity} radius={.15} />
-        <mesh position={[-.48, -.05, 1.5]} renderOrder={34}><sphereGeometry args={[.13, 14, 10]} />
+        <RoundedPiece size={[1.5, .46, .92]} position={[0, fuelTankY, fuelTankZ]} color={COLORS.fuel} opacity={fuelOpacity} radius={.15} />
+        <mesh position={[fuelPumpX, fuelPumpY, fuelPumpZ]} renderOrder={34}><sphereGeometry args={[.13, 14, 10]} />
           <meshBasicMaterial color={COLORS.fuel} depthTest={false} toneMapped={false} /></mesh>
-        <TracePath points={fuelPath} color={COLORS.fuel} opacity={fuelOpacity} active={rpm >= 200} speed={.28 + throttle * 1.2} />
+        <TracePath points={fuelPath} color={COLORS.fuel} opacity={fuelOpacity}
+          active={rpm >= 200 && (focus !== 'live' || gasActive)} speed={.18 + throttle * 1.65} />
       </group>
 
       <group visible={powerOpacity > .02}>
-        <EngineBlock throttle={throttle} opacity={powerOpacity} />
-        <RoundedPiece size={[.82, .56, 1.05]} position={[0, -.03, -.62]} color={COLORS.power} opacity={powerOpacity} radius={.14} />
-        <Tube start={[0, -.14, -.08]} end={[0, -.14, 1.55]} color={COLORS.powerDark} radius={.09} opacity={powerOpacity} xray />
-        <mesh position={[0, -.13, 1.78]} rotation={[0, Math.PI / 2, 0]}>
+        <group position={[0, engineY, engineZ + 1.72]}><EngineBlock throttle={throttle} rpm={rpm} opacity={powerOpacity} /></group>
+        <RoundedPiece size={[.82, .56, 1.05]} position={[0, transmissionY, transmissionZ]} color={COLORS.power} opacity={powerOpacity} radius={.14} />
+        <DriveShaft y={shaftY} speed={drivetrainConnected ? speed : 0} opacity={powerOpacity} />
+        <mesh position={[0, differentialY, differentialZ]} rotation={[0, Math.PI / 2, 0]}>
           <torusGeometry args={[.36, .12, 12, 28]} /><meshStandardMaterial color={COLORS.power} transparent opacity={powerOpacity} />
         </mesh>
-        <TracePath points={powerInputPath} color={COLORS.power} opacity={powerOpacity} active={rpm >= 200} speed={.85 + throttle * .6} count={3} />
+        <TracePath points={powerInputPath} color={COLORS.power} opacity={powerOpacity}
+          active={rpm >= 200 && (focus !== 'live' || powerActive)} speed={.7 + throttle * 1.1} count={3} />
         <TracePath points={powerOutputPath} color={COLORS.power} opacity={powerOpacity}
-          active={Math.abs(speed) > .04 || (drivetrainConnected && throttle > .02)} speed={1.15} />
-        <TracePath points={powerLeftPath} color={COLORS.power} opacity={powerOpacity} active={Math.abs(speed) > .04} speed={1.1} count={3} />
-        <TracePath points={powerRightPath} color={COLORS.power} opacity={powerOpacity} active={Math.abs(speed) > .04} speed={1.1} count={3} />
+          active={Math.abs(speed) > .04 || (drivetrainConnected && gasActive)} speed={1.15 + throttle * .65} />
+        <TracePath points={powerLeftPath} color={COLORS.power} opacity={powerOpacity}
+          active={Math.abs(speed) > .04 || (drivetrainConnected && gasActive)} speed={1.1 + throttle * .6} count={3} />
+        <TracePath points={powerRightPath} color={COLORS.power} opacity={powerOpacity}
+          active={Math.abs(speed) > .04 || (drivetrainConnected && gasActive)} speed={1.1 + throttle * .6} count={3} />
       </group>
 
       <group visible={brakeOpacity > .02}>
-        <RoundedPiece size={[.36, .27, .45]} position={[-.56, .52, -.58]} color={COLORS.brakes} opacity={brakeOpacity} radius={.07} />
+        <RoundedPiece size={[.36, .27, .45]} position={[masterX, masterY, -.58]} color={COLORS.brakes} opacity={brakeOpacity} radius={.07} />
         {brakePaths.map((points, index) => <TracePath key={index} points={points} color={COLORS.brakes} opacity={brakeOpacity}
-          active={brake > .02} speed={.75 + brake} count={4} lineWidth={4} />)}
+          active={serviceBrakeActive} speed={.75 + brake} count={4} lineWidth={4} />)}
       </group>
 
       <group visible={steeringOpacity > .02}>
-        <mesh position={[-.58, 1.02, -.18]} rotation={[Math.PI / 2, 0, steerRadians * 4]}>
+        <mesh position={[-.58, steeringWheelY, steeringWheelZ]} rotation={[Math.PI / 2, 0, steerRadians * 4]}>
           <torusGeometry args={[.26, .035, 9, 26]} /><meshStandardMaterial color={COLORS.steering} transparent opacity={steeringOpacity} /></mesh>
-        <RoundedPiece size={[2.35, .16, .18]} position={[0, -.01, -1.88]} color={COLORS.steering} opacity={steeringOpacity} radius={.06} />
+        <RoundedPiece size={[2.35, .16, .18]} position={[rackShift, rackY, rackZ]} color={COLORS.steering} opacity={steeringOpacity} radius={.06} />
+        <Tube start={[rackShift - 1.02, rackY, rackZ]} end={[-wheelX, -.04, FRONT_AXLE_Z]}
+          color={COLORS.steering} radius={.045} opacity={steeringOpacity} xray />
+        <Tube start={[rackShift + 1.02, rackY, rackZ]} end={[wheelX, -.04, FRONT_AXLE_Z]}
+          color={COLORS.steering} radius={.045} opacity={steeringOpacity} xray />
         {steeringPaths.map((points, index) => <TracePath key={index} points={points} color={COLORS.steering} opacity={steeringOpacity}
-          active={Math.abs(steering) > .2} speed={.65} count={index === 0 ? 3 : 2} />)}
+          active={steeringActive} speed={.65} count={index === 0 ? 3 : 2} />)}
       </group>
 
       {[[-wheelX, FRONT_AXLE_Z], [wheelX, FRONT_AXLE_Z], [-wheelX, REAR_AXLE_Z], [wheelX, REAR_AXLE_Z]].map(([x, z], index) => (
         <group key={`${x}-${z}`}>
-          <CoilSpring position={[x * .86, .22 + explode * .12, z]} opacity={suspensionOpacity} compression={(index < 2 ? suspensionLoad : -suspensionLoad) * .5} />
+          <CoilSpring position={[x * .84, .22 + explode * .28, z]} opacity={suspensionOpacity} compression={(index < 2 ? suspensionLoad : -suspensionLoad) * .5} />
           {suspensionOpacity > .02 && <TracePath points={[[x, -.12, z], [x * .86, .18, z], [x * .72, .58, z]]}
-            color={COLORS.suspension} opacity={suspensionOpacity} active={Math.abs(suspensionLoad) > .04} speed={.5} count={2} lineWidth={3} />}
+            color={COLORS.suspension} opacity={suspensionOpacity} active={suspensionActive} speed={.5} count={2} lineWidth={3} />}
         </group>
       ))}
 
@@ -428,7 +507,12 @@ export function CarModel({
       <Wheel position={[-1.57, -.15, REAR_AXLE_Z]} speed={speed} brake={Math.max(brake, parkingBrake)} explode={explode} focus={focus} />
       <Wheel position={[1.57, -.15, REAR_AXLE_Z]} speed={speed} brake={Math.max(brake, parkingBrake)} explode={explode} focus={focus} />
 
-      <SystemLabels focus={focus} wheelX={wheelX} gear={gear} />
+      <SystemLabels focus={focus} wheelX={wheelX} gear={gear} positions={{
+        fuelTank: [0, fuelTankY + .65, fuelTankZ], fuelRail: [-.42, engineY + .9, engineZ],
+        engine: [0, engineY + 1.02, engineZ], transmission: [0, transmissionY + .58, transmissionZ],
+        differential: [0, differentialY + .68, differentialZ], masterCylinder: [masterX, masterY + .76, -.58],
+        steeringWheel: [-.58, steeringWheelY + .4, steeringWheelZ], rack: [rackShift, rackY + .56, rackZ],
+      }} />
     </group>
   )
 }
