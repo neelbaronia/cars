@@ -132,6 +132,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .engine-diagram { position: absolute; inset: 0; display: grid; place-items: center; padding: 64px 8px 58px; background: #f3e8d8; overflow: hidden; }
 .engine-diagram svg { width: 100%; height: 100%; display: block; }
 .diagram-schematic-note { fill: #796f68; font: 500 10px 'DM Mono', monospace; letter-spacing: .08em; }
+.diagram-speed-note { fill: #28778c; font: 700 10px 'DM Mono', monospace; letter-spacing: .04em; }
 .diagram-material-key text { fill: #5f7174; font: 600 10px 'DM Mono', monospace; }
 .diagram-material-key .is-fuel { fill: #ffd957; stroke: #9b741b; stroke-width: 1.5; }
 .diagram-material-key .is-air { fill: #d7f1ef; stroke: #28778c; stroke-width: 1.5; }
@@ -139,7 +140,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .diagram-paths { opacity: 1; transition: opacity .3s ease; }
 .diagram-paths.is-muted, .engine-diagram--energy .diagram-paths { opacity: .24; }
 .diagram-pipe { fill: none; stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 14 10; }
-.diagram-pipe.is-flowing { animation: diagram-flow .65s linear infinite; }
+.diagram-pipe.is-flowing { animation: diagram-flow var(--diagram-flow-duration, .65s) linear infinite; }
 .diagram-pipe--air { stroke: #3f9a9d; }
 .diagram-pipe--fuel { stroke: #e1aa25; }
 .diagram-pipe--exhaust { stroke: #b97d45; }
@@ -148,6 +149,9 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .diagram-fuel-spray path { fill: none; stroke: #f2c348; stroke-width: 3; stroke-dasharray: 4 5; }
 .diagram-fuel-spray circle { fill: #ffd957; stroke: #9b741b; stroke-width: 1.4; }
 .diagram-fuel-spray text { fill: #8b6515; font: 600 10px 'DM Mono', monospace; }
+.diagram-throttle-body circle { fill: #fff8e9; stroke: #28778c; stroke-width: 3; }
+.diagram-throttle-body line { stroke: #e6543f; stroke-width: 5; stroke-linecap: round; }
+.diagram-throttle-body text { fill: #28778c; font: 700 8px 'DM Mono', monospace; letter-spacing: .02em; }
 .diagram-label rect { fill: #fff8e9; stroke: #9f8e80; stroke-width: 1.5; }
 .diagram-label text { fill: #315964; font: 600 12px 'DM Mono', monospace; }
 .diagram-label--air rect { stroke: #3f9a9d; }
@@ -319,6 +323,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .slider-control.is-disabled { opacity: .5; }
 .control-label { display: flex; align-items: center; justify-content: space-between; font-size: .77rem; font-weight: 600; }
 .control-label output { color: var(--range-accent); font: 500 .72rem 'DM Mono', monospace; }
+.slider-hint { margin-top: -4px; color: #817972; font-size: .62rem; line-height: 1.45; }
 input[type='range'] { width: 100%; height: 6px; appearance: none; border-radius: 0; background: linear-gradient(90deg, var(--range-accent) var(--range-progress), #e7ded2 var(--range-progress)); cursor: pointer; }
 input[type='range']::-webkit-slider-thumb { width: 18px; height: 18px; appearance: none; border: 2px solid var(--paper); border-radius: 50%; background: var(--range-accent); box-shadow: 0 0 0 1px #8b756c, 2px 2px 0 rgba(78,57,49,.15); }
 input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px solid var(--paper); border-radius: 50%; background: var(--range-accent); }
@@ -386,6 +391,11 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
 .playback-control { display: grid; gap: 8px; }
 .playback-control > span { color: #354e53; font-size: .72rem; font-weight: 600; }
 .playback-control .segmented button { min-height: 29px; padding-block: 3px; }
+.engine-control-feedback { display: grid; gap: 7px; padding: 11px 12px; border-left: 4px solid #28778c; background: #e3f0ed; }
+.engine-control-feedback p { display: grid; grid-template-columns: 54px 1fr; gap: 8px; margin: 0; align-items: baseline; }
+.engine-control-feedback p span { color: #28778c; font: 700 .56rem 'DM Mono', monospace; letter-spacing: .05em; text-transform: uppercase; }
+.engine-control-feedback p strong { color: #38545b; font: 500 .62rem/1.4 'DM Mono', monospace; }
+.engine-control-feedback > small { padding-top: 3px; border-top: 1px solid rgba(40,119,140,.18); color: #6e7775; font-size: .58rem; line-height: 1.45; }
 .switch-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; cursor: pointer; }
 .switch-row > span { display: grid; gap: 2px; }
 .switch-row strong { font-size: .74rem; }

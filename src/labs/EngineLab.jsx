@@ -20,10 +20,13 @@ function cylinderPressure(progress, spark, throttle, rpm) {
   const stroke = Math.floor(progress) % 4
   const within = progress - Math.floor(progress)
   const load = effectiveLoad(throttle, rpm)
-  if (stroke === 0) return 0.88 + load * 0.001
-  if (stroke === 1) return 1 + within ** 2 * 10
-  if (stroke === 2 && spark && load > 0) return 11 + (1 - within) ** 2 * (8 + load * 0.45)
-  if (stroke === 2) return 1 + 10 * (1 - within) ** 1.5
+  const manifoldBar = 0.32 + load * 0.0066
+  const compressionPeakBar = manifoldBar * 15
+  const firedPeakBar = compressionPeakBar + load * 0.38
+  if (stroke === 0) return manifoldBar
+  if (stroke === 1) return manifoldBar + (compressionPeakBar - manifoldBar) * within ** 1.6
+  if (stroke === 2 && spark && load > 0) return 1 + (firedPeakBar - 1) * (1 - within) ** 1.45
+  if (stroke === 2) return 1 + (compressionPeakBar - 1) * (1 - within) ** 1.45
   return 1.08 + (1 - within) * 0.35
 }
 
@@ -39,10 +42,10 @@ export default function EngineLab() {
   useEffect(() => {
     if (!running) return undefined
     const timer = window.setInterval(() => {
-      setProgress((current) => (current + 0.02 * playbackRate) % 4)
+      setProgress((current) => (current + 0.02 * playbackRate * (rpm / 2200)) % 4)
     }, 50)
     return () => window.clearInterval(timer)
-  }, [playbackRate, running])
+  }, [playbackRate, rpm, running])
 
   const strokeIndex = Math.floor(progress) % 4
   const stroke = STROKES[strokeIndex]
@@ -59,6 +62,11 @@ export default function EngineLab() {
   const output = engineOutput({ rpm, throttle: throttle / 100, spark })
   const fuelPerCycleMg = output.fuelRateGps > 0 ? (output.fuelRateGps / Math.max(1, rpm / 120 * 4)) * 1000 : 0
   const useful = output.powerKw > 0 ? Math.round(output.efficiency * 100) : 0
+  const crankTurnsPerSecond = rpm / 60
+  const cylinderCyclesPerSecond = rpm / 120
+  const realCycleMs = 120000 / rpm
+  const displayedCycleSeconds = 22000 / (playbackRate * rpm)
+  const angularSpeedRadPerSecond = crankTurnsPerSecond * Math.PI * 2
 
   const reset = () => { setProgress(0.12); setRunning(true); setThrottle(38); setRpm(2200); setSpark(true); setMode('path'); setPlaybackRate(0.65) }
   const chooseStroke = (index) => { setProgress(index + 0.12); setRunning(false); setMode('cycle') }
@@ -101,8 +109,16 @@ export default function EngineLab() {
             ]} />
           </div>
           <Slider label="Crank angle" value={crankAngle} min={0} max={719} unit="°" onChange={(value) => { setProgress(value / 180); setRunning(false); setMode('cycle') }} accent="#76569b" />
-          <Slider label="Accelerator request" value={throttle} min={0} max={100} unit="%" onChange={setThrottle} />
-          <Slider label="Engine speed" value={rpm} min={800} max={6000} step={100} unit=" rpm" onChange={setRpm} accent="#28778c" />
+          <Slider label="Accelerator request" value={throttle} min={0} max={100} unit="%" onChange={setThrottle}
+            hint="Opens the throttle and changes the air/fuel dose, burn pressure, and resulting torque." />
+          <Slider label="Engine speed" value={rpm} min={800} max={6000} step={100} unit=" rpm" onChange={setRpm} accent="#28778c"
+            hint="Changes the relative crank speed and torque-to-power calculation; the cutaway remains slow-motion." />
+          <div className="engine-control-feedback">
+            <p><span>Request</span><strong>{throttle}% → {fuelPerCycleMg.toFixed(1)} mg fuel / cylinder cycle</strong></p>
+            <p><span>Speed</span><strong>{rpm.toLocaleString()} rpm → {cylinderCyclesPerSecond.toFixed(1)} cycles/s · {realCycleMs.toFixed(1)} ms/cycle</strong></p>
+            <p><span>Output</span><strong>{output.torqueNm.toFixed(0)} N·m × {angularSpeedRadPerSecond.toFixed(0)} rad/s → {output.powerKw.toFixed(1)} kW</strong></p>
+            <small>Dyno-style controls isolate request from RPM. This {displayedCycleSeconds.toFixed(1)} s cutaway is about {(displayedCycleSeconds / (realCycleMs / 1000)).toFixed(0)}× slower than the real cycle.</small>
+          </div>
           <label className="switch-row"><span><strong>Spark enabled</strong><small>Turn it off: air and fuel still enter, but useful torque vanishes.</small></span>
             <input type="checkbox" checked={spark} onChange={(event) => setSpark(event.target.checked)} /><i /></label>
         </div>

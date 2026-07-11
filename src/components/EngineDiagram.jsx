@@ -32,7 +32,8 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
   const exhaustFlowing = stroke === 3 && mode !== 'energy'
   const chamberHeight = Math.max(18, pistonTop - 202)
   const mixtureVisible = load > 0 && (stroke === 0 || stroke === 1 || (stroke === 2 && within < 0.16))
-  const mixtureDots = Array.from({ length: 12 }, (_, index) => ({
+  const mixtureDotCount = 6 + Math.round(load / 7)
+  const mixtureDots = Array.from({ length: mixtureDotCount }, (_, index) => ({
     x: 354 + (index * 37) % 116,
     y: 211 + (((index * 47) % 100) / 100) * Math.max(8, chamberHeight - 18),
     fuel: index % 3 === 0,
@@ -40,6 +41,10 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
   const burnProgress = stroke === 2 && firing ? Math.min(1, within / 0.62) : 0
   const shaftDegrees = progress * 180
   const wheelDegrees = progress * 78
+  const fuelDropletCount = fuelFlowing ? Math.max(1, Math.ceil(load / 20)) : 0
+  const sprayParticleCount = fuelFlowing ? Math.max(1, Math.ceil(load / 25)) : 0
+  const fuelTravelSeconds = Math.max(1.15, 3.5 - load * 0.022)
+  const throttlePlateDegrees = 90 - throttle * 0.9
 
   return (
     <div className={`engine-diagram engine-diagram--${mode}`}>
@@ -77,6 +82,7 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
         <rect width="900" height="650" fill="#f3e8d8" />
         <rect width="900" height="650" fill="url(#paper-grid)" />
         <text className="diagram-schematic-note" x="72" y="104">MECHANICAL SCHEMATIC · COMPONENTS NOT TO SCALE</text>
+        <text className="diagram-speed-note" x="828" y="104" textAnchor="end">ACTUAL · {(rpm / 60).toFixed(1)} CRANK REV/S · {(120000 / rpm).toFixed(1)} MS/CYCLE</text>
         <g className="diagram-material-key" transform="translate(610 145)">
           <circle cx="0" cy="0" r="6" className="is-fuel" /><text x="12" y="4">FUEL</text>
           <circle cx="72" cy="0" r="6" className="is-air" /><text x="84" y="4">AIR</text>
@@ -84,12 +90,19 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
         </g>
 
         <g className={`diagram-paths ${mode === 'cycle' ? 'is-muted' : ''}`}>
-          <path className={`diagram-pipe diagram-pipe--air ${airFlowing ? 'is-flowing' : ''}`} d="M72 188 H230 Q275 188 318 214 L350 228" />
-          <path className={`diagram-pipe diagram-pipe--fuel ${fuelFlowing ? 'is-flowing' : ''}`} d="M724 468 Q640 435 604 365 Q558 272 454 176" />
+          <path className={`diagram-pipe diagram-pipe--air ${airFlowing ? 'is-flowing' : ''}`} d="M72 188 H230 Q275 188 318 214 L350 228"
+            style={{ '--diagram-flow-duration': `${Math.max(.42, 1.05 - load * .006)}s`, strokeWidth: 8 + load * .055 }} />
+          <path className={`diagram-pipe diagram-pipe--fuel ${fuelFlowing ? 'is-flowing' : ''}`} d="M724 468 Q640 435 604 365 Q558 272 454 176"
+            style={{ '--diagram-flow-duration': `${Math.max(.45, 1.1 - load * .006)}s`, strokeWidth: 8 + load * .05 }} />
           <path className={`diagram-pipe diagram-pipe--exhaust ${exhaustFlowing ? 'is-flowing' : ''}`} d="M491 226 Q555 226 585 263 H798" />
-          {fuelFlowing && [0, 1, 2].map((index) => (
-            <circle key={index} r="7" className="diagram-fuel-droplet">
-              <animateMotion dur="2.8s" begin={`${index * -0.92}s`} repeatCount="indefinite"
+          <g className="diagram-throttle-body" transform="translate(248 188)">
+            <circle r="16" />
+            <line x1="-14" y1="0" x2="14" y2="0" transform={`rotate(${throttlePlateDegrees})`} />
+            <text x="0" y="34" textAnchor="middle">{throttle}% OPEN</text>
+          </g>
+          {Array.from({ length: fuelDropletCount }, (_, index) => (
+            <circle key={index} r={5 + load * .025} className="diagram-fuel-droplet">
+              <animateMotion dur={`${fuelTravelSeconds}s`} begin={`${index * -(fuelTravelSeconds / Math.max(1, fuelDropletCount))}s`} repeatCount="indefinite"
                 path="M724 468 Q640 435 604 365 Q558 272 454 176" />
             </circle>
           ))}
@@ -104,12 +117,12 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
           {fuelFlowing && (
             <g className="diagram-fuel-spray">
               <path d="M454 192 Q424 202 389 224" />
-              {[0, 1, 2, 3].map((index) => (
+              {Array.from({ length: sprayParticleCount }, (_, index) => (
                 <circle key={index} r="4">
-                  <animateMotion dur=".72s" begin={`${index * -0.18}s`} repeatCount="indefinite" path="M454 192 Q424 202 389 224" />
+                  <animateMotion dur={`${Math.max(.35, .9 - load * .005)}s`} begin={`${index * -0.18}s`} repeatCount="indefinite" path="M454 192 Q424 202 389 224" />
                 </circle>
               ))}
-              <text x="500" y="205">FUEL SPRAY</text>
+              <text x="500" y="205">FUEL DOSE · {throttle}% REQUEST</text>
             </g>
           )}
         </g>
@@ -127,11 +140,12 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
           )}
           {burnProgress > 0 && (
             <g className="diagram-combustion" clipPath="url(#diagram-chamber-clip)">
-              <circle cx="417" cy="204" r={12 + burnProgress * 145} fill="url(#combustion-glow)" className="diagram-combustion-front" />
+              <circle cx="417" cy="204" r={12 + burnProgress * (85 + load * .6)} fill="url(#combustion-glow)"
+                className="diagram-combustion-front" opacity={.58 + load * .004} />
               {within < .28 && <path className="diagram-flame-core" d="M417 198c-24 28-17 50 0 62 18-12 25-35 7-54 1 14-7 18-12 25 2-14-2-22 5-33z" />}
             </g>
           )}
-          {burnProgress > 0 && <text className="diagram-combustion-label" x="512" y="236">CONTROLLED BURN → HOT GAS</text>}
+          {burnProgress > 0 && <text className="diagram-combustion-label" x="512" y="236">{throttle}% REQUEST → CONTROLLED BURN → HOT GAS</text>}
           <text className="diagram-pressure" x="412" y="236" textAnchor="middle">{pressureBar.toFixed(1)} BAR</text>
 
           <g className={`diagram-valve ${intakeOpen ? 'is-open' : ''}`} transform={`translate(378 ${intakeOpen ? 8 : 0})`}>
