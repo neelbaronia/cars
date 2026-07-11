@@ -1,15 +1,15 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Grid } from '@react-three/drei'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { CAR_TIRE_EXPLODE_OFFSET, CarModel } from '../components/CarModel.jsx'
+import { FLAVORTOWN_SIZE, FlavortownCity } from '../components/FlavortownCity.jsx'
 import { Equation, FlowChain, Metric, Note, RenderFallback, ResetButton, SceneBadge, SectionHeader, Segmented, Slider } from '../components/LabUI.jsx'
 import { ForceArrow, StudioLights } from '../components/SceneKit.jsx'
 import { clamp, stepVehicle } from '../physics.js'
 import { usePerspectiveInput } from '../usePerspectiveInput.js'
 
 const INITIAL_TELEMETRY = {
-  speed: 0, rpm: 850, gear: 1, fuel: 44, brakePressure: 0, steeringDeg: 0,
+  speed: 0, rpm: 850, gear: 1, fuel: 44, brakePressure: 0, steeringDeg: 0, steeringInputDeg: 0,
   acceleration: 0, lateralG: 0, grip: 0, engineTorque: 0, driveForce: 0,
   resistanceForce: 0, brakeForce: 0, aeroDrag: 0, rollingResistance: 0,
   appliedThrottle: 0, parkingBrake: 0,
@@ -17,6 +17,7 @@ const INITIAL_TELEMETRY = {
 }
 const CAR_VISUAL_SCALE = .68
 const CAR_RIDE_HEIGHT = -1.07
+const CITY_WRAP_HALF = FLAVORTOWN_SIZE / 2
 
 function automaticGear(speed, throttle) {
   const kph = Math.max(0, speed * 3.6)
@@ -35,50 +36,6 @@ function initialSimulationState() {
     mass: 1450, wheelRadius: 0.31, wheelbase: 2.7,
   }, { throttle: 0, brake: 0, steeringDeg: 0, gear: 1 }, 0)
   return { ...seeded, fuel: 44, brakeTemp: 22 }
-}
-
-function TestTrack() {
-  return (
-    <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.5, 0]} receiveShadow>
-        <planeGeometry args={[420, 420]} /><meshStandardMaterial color="#8fc69c" roughness={0.98} />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.485, 0]} receiveShadow>
-        <planeGeometry args={[12, 390]} /><meshStandardMaterial color="#596c6d" roughness={0.93} />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.477, 54]} receiveShadow>
-        <planeGeometry args={[180, 10]} /><meshStandardMaterial color="#596c6d" roughness={0.93} />
-      </mesh>
-      {Array.from({ length: 54 }, (_, index) => (
-        <mesh key={`dash-main-${index}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.465, index * 7 - 185]}>
-          <planeGeometry args={[0.18, 3.4]} /><meshBasicMaterial color="#f7e4a6" />
-        </mesh>
-      ))}
-      {Array.from({ length: 24 }, (_, index) => (
-        <mesh key={`dash-cross-${index}`} rotation={[-Math.PI / 2, 0, Math.PI / 2]} position={[index * 7 - 80, -1.46, 54]}>
-          <planeGeometry args={[0.18, 3.4]} /><meshBasicMaterial color="#f7e4a6" />
-        </mesh>
-      ))}
-      {[-5.5, 5.5].map((x) => <mesh key={x} rotation={[-Math.PI / 2, 0, 0]} position={[x, -1.46, 0]}>
-        <planeGeometry args={[0.14, 390]} /><meshBasicMaterial color="#fff8dd" />
-      </mesh>)}
-      {Array.from({ length: 9 }, (_, index) => {
-        const z = 18 + index * 10
-        const x = index % 2 === 0 ? -2.6 : 2.6
-        return <group key={`cone-${index}`} position={[x, -1.42, z]}>
-          <mesh><coneGeometry args={[0.28, 0.72, 12]} /><meshStandardMaterial color="#e6543f" /></mesh>
-          <mesh position={[0, -0.34, 0]}><cylinderGeometry args={[0.38, 0.38, 0.06, 12]} /><meshStandardMaterial color="#fff0cb" /></mesh>
-        </group>
-      })}
-      {[-1, 1].flatMap((side) => Array.from({ length: 16 }, (_, index) => (
-        <group key={`tree-${side}-${index}`} position={[side * (14 + (index % 3) * 4), -1.2, index * 22 - 155]}>
-          <mesh position={[0, 1.1, 0]}><cylinderGeometry args={[0.15, 0.2, 2.2, 8]} /><meshStandardMaterial color="#956542" /></mesh>
-          <mesh position={[0, 2.45, 0]}><sphereGeometry args={[1.1, 14, 10]} /><meshStandardMaterial color={index % 2 ? '#eec35b' : '#e99aab'} roughness={0.9} /></mesh>
-        </group>
-      )))}
-      <Grid args={[420, 420]} position={[0, -1.455, 0]} cellSize={7} cellThickness={0.25} cellColor="#6da57a" sectionSize={35} sectionThickness={0.45} sectionColor="#5f966f" fadeDistance={210} fadeStrength={1} infiniteGrid={false} />
-    </group>
-  )
 }
 
 function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode, focus, explode, commands, cameraMode, resetSignal, onTelemetry, onCameraView }) {
@@ -112,6 +69,7 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
     let lastServiceBrake = 0
     let lastParkingBrake = 0
     let lastSteering = steeringVisual.current
+    let lastSteeringInput = steeringVisual.current
     let cameraShiftX = 0
     let cameraShiftZ = 0
 
@@ -145,15 +103,16 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
       next.fuel = Math.max(0, state.current.fuel - fuelUsed)
       const brakePower = next.drivetrain.brakeForce * Math.abs(next.speed)
       next.brakeTemp = Math.max(22, state.current.brakeTemp + brakePower / 150000 * fixedStep - (state.current.brakeTemp - 22) * 0.018 * fixedStep)
-      if (next.x > 180) { next.x -= 360; cameraShiftX -= 360 }
-      if (next.x < -180) { next.x += 360; cameraShiftX += 360 }
-      if (next.z > 180) { next.z -= 360; cameraShiftZ -= 360 }
-      if (next.z < -180) { next.z += 360; cameraShiftZ += 360 }
+      if (next.x > CITY_WRAP_HALF) { next.x -= FLAVORTOWN_SIZE; cameraShiftX -= FLAVORTOWN_SIZE }
+      if (next.x < -CITY_WRAP_HALF) { next.x += FLAVORTOWN_SIZE; cameraShiftX += FLAVORTOWN_SIZE }
+      if (next.z > CITY_WRAP_HALF) { next.z -= FLAVORTOWN_SIZE; cameraShiftZ -= FLAVORTOWN_SIZE }
+      if (next.z < -CITY_WRAP_HALF) { next.z += FLAVORTOWN_SIZE; cameraShiftZ += FLAVORTOWN_SIZE }
       state.current = next
       lastThrottle = throttle
       lastServiceBrake = serviceBrake
       lastParkingBrake = parkingBrake
       lastSteering = physicsSteering
+      lastSteeringInput = steeringVisual.current
       accumulator.current -= fixedStep
     }
 
@@ -207,13 +166,20 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
       const longitudinalTireG = tireLongitudinalForce / (current.mass * 9.81)
       const lateralG = lateralAcceleration / 9.81
       const grip = Math.min(120, Math.hypot(longitudinalTireG, lateralG) / 0.9 * 100)
+      const steeringStatus = Math.abs(lastSteeringInput) > .5
+        ? Math.abs(current.speed) > .2
+          ? `Turning ${lastSteeringInput > 0 ? 'left' : 'right'}`
+          : `Wheels ${lastSteeringInput > 0 ? 'left' : 'right'} · add W`
+        : null
       const status = lastServiceBrake > 0 || lastParkingBrake > 0 ? 'Braking'
-        : lastThrottle > 0 && current.gear === 'N' && driveMode !== 'N' ? 'Stop to change direction'
-          : lastThrottle > 0 && current.gear === 'N' ? 'Engine revving'
-          : lastThrottle > 0 ? 'Accelerating' : Math.abs(current.speed) > 0.2 ? 'Coasting' : 'Ready'
+        : steeringStatus
+          || (lastThrottle > 0 && current.gear === 'N' && driveMode !== 'N' ? 'Stop to change direction'
+            : lastThrottle > 0 && current.gear === 'N' ? 'Engine revving'
+              : lastThrottle > 0 ? 'Accelerating' : Math.abs(current.speed) > 0.2 ? 'Coasting' : 'Ready')
       onTelemetry({
         speed: current.speed, rpm: current.rpm, gear: current.gear, fuel: current.fuel,
-        brakePressure: lastServiceBrake * (90 / 0.88), parkingBrake: lastParkingBrake, steeringDeg: lastSteering,
+        brakePressure: lastServiceBrake * (90 / 0.88), parkingBrake: lastParkingBrake,
+        steeringDeg: lastSteering, steeringInputDeg: lastSteeringInput,
         acceleration: current.drivetrain.acceleration, lateralG, grip,
         engineTorque: current.engine.torqueNm, driveForce: current.drivetrain.tractionLimitedForce,
         resistanceForce: current.drivetrain.brakeForce + current.drivetrain.aeroDrag + current.drivetrain.rollingResistance,
@@ -238,18 +204,21 @@ function DriveScene({ inputRef, perspectiveInputRef, displayTelemetry, driveMode
     : focus === 'all' || focus === 'drive' || focus === 'live'
       ? THREE.MathUtils.lerp(.54, .05, explode)
       : focus === 'forces' ? THREE.MathUtils.lerp(.76, .18, explode) : THREE.MathUtils.lerp(.2, .04, explode)
+  const visibleShellOpacity = (commands.left || commands.right) && focus === 'body'
+    ? Math.min(shellOpacity, .42)
+    : shellOpacity
   return (
     <>
-      <color attach="background" args={['#87cad8']} />
-      <fog attach="fog" args={['#9dd1d5', 75, 205]} />
+      <color attach="background" args={['#86c8dc']} />
+      <fog attach="fog" args={['#b8d8cf', 52, 126]} />
       <StudioLights />
-      <TestTrack />
+      <FlavortownCity centerX={displayTelemetry.x} centerZ={displayTelemetry.z} />
       <group ref={car}>
         <group scale={CAR_VISUAL_SCALE}>
-          <CarModel explode={explode} focus={focus} bodyOpacity={shellOpacity}
+          <CarModel explode={explode} focus={focus} bodyOpacity={visibleShellOpacity}
             throttle={displayTelemetry.appliedThrottle} rpm={displayTelemetry.rpm} gear={displayTelemetry.gear}
             brake={displayTelemetry.brakePressure / 90} parkingBrake={displayTelemetry.parkingBrake}
-            steering={displayTelemetry.steeringDeg} speed={displayTelemetry.speed}
+            steering={displayTelemetry.steeringInputDeg ?? displayTelemetry.steeringDeg} speed={displayTelemetry.speed}
             suspensionLoad={clamp(-displayTelemetry.acceleration / 7, -0.5, 1)} commands={commands} />
           {showForces && (
             <group>
@@ -294,7 +263,16 @@ function useDriveInput() {
     const update = (event, active) => {
       const control = keyMap[event.key.toLowerCase()]
       if (!control) return
-      if (event.target instanceof Element && event.target.closest('input, button, select, textarea, [contenteditable="true"]')) return
+      const target = event.target instanceof Element ? event.target : null
+      const typing = target?.closest('input:not([type="range"]), select, textarea, [contenteditable="true"]')
+      const spaceActivatesControl = control === 'handbrake' && target?.closest('button, a[href], input, select, textarea')
+      const modified = event.metaKey || event.ctrlKey || event.altKey
+      if (active && (typing || spaceActivatesControl || modified)) return
+      if (!active) {
+        if (!typing && !spaceActivatesControl && !modified) event.preventDefault()
+        setControl(control, false)
+        return
+      }
       event.preventDefault()
       setControl(control, active)
     }
@@ -364,8 +342,8 @@ export default function SimulatorLab() {
 
   return (
     <div className="lab-layout lab-layout--cake-box">
-      <section className="demo-pane demo-pane--simulator" aria-label="Drivable car simulator with x-ray systems">
-        <div className="scene-toolbar"><SceneBadge>{telemetry.status} · {speedKph.toFixed(0)} km/h</SceneBadge><ResetButton onClick={reset} /></div>
+      <section className="demo-pane demo-pane--simulator" aria-label="Drivable car simulator with x-ray systems in Flavortown">
+        <div className="scene-toolbar"><SceneBadge>Flavortown · {telemetry.status} · {speedKph.toFixed(0)} km/h</SceneBadge><ResetButton onClick={reset} /></div>
         <div className="scene-mode simulator-scene-mode">
           <Segmented label="Visible car system" value={focus} onChange={setFocus} options={[
             { value: 'body', label: 'Exterior' }, { value: 'live', label: 'Live' }, { value: 'power', label: 'Drivetrain' }, { value: 'brakes', label: 'Brakes' }, { value: 'steering', label: 'Steering' },
@@ -404,8 +382,8 @@ export default function SimulatorLab() {
       </section>
 
       <aside className="lesson-pane">
-        <SectionHeader kicker="Experiment 03 · Drive + x-ray" title="Drive it. Pull it apart. Watch every command travel.">
-          The exploded offsets are visual only: the same car physics continues underneath while fuel flows, shafts rotate, brake pressure builds, and steering links move.
+        <SectionHeader kicker="Experiment 03 · Flavortown drive + x-ray" title="Drive Flavortown. Pull the car apart. Watch every command travel.">
+          The endless pastel city recycles around the car while the same physics continues underneath: fuel flows, shafts rotate, brake pressure builds, and steering links move.
         </SectionHeader>
 
         <div className="drive-instruction"><kbd>W</kbd><span>gas</span><kbd>A</kbd><kbd>D</kbd><span>steer</span><kbd>S</kbd><span>brake</span><kbd>space</kbd><span>parking brake</span><kbd>←</kbd><kbd>→</kbd><span>orbit</span><kbd>↑</kbd><kbd>↓</kbd><span>view height</span></div>
@@ -430,7 +408,7 @@ export default function SimulatorLab() {
           <Metric label="Engine torque" value={`${displayedTorque.toFixed(0)} N·m`} />
           <Metric label="Drive force" value={`${(displayedDriveForce / 1000).toFixed(1)} kN`} tone="violet" />
           <Metric label="Brake line" value={`${telemetry.brakePressure.toFixed(0)} bar`} tone="blue" />
-          <Metric label="Steering" value={`${telemetry.steeringDeg.toFixed(1)}°`} tone="yellow" />
+          <Metric label="Wheel / grip-effective" value={`${(telemetry.steeringInputDeg ?? telemetry.steeringDeg).toFixed(0)}° / ${telemetry.steeringDeg.toFixed(1)}°`} tone="yellow" />
           <Metric label="Longitudinal" value={`${(telemetry.acceleration / 9.81).toFixed(2)} g`} tone="coral" />
           <Metric label="Lateral" value={`${telemetry.lateralG.toFixed(2)} g`} tone="blue" />
         </div>
@@ -463,7 +441,7 @@ export default function SimulatorLab() {
             yaw rate ≈ v tan(δ) ÷ L
           </Equation>
           <div className="grip-meter" style={{ '--grip': `${Math.min(100, telemetry.grip)}%` }}><span /><b>{telemetry.grip.toFixed(0)}% combined tire demand</b></div>
-          <p className="body-copy body-copy--spaced">Hard braking and hard cornering compete for the same contact-patch capability. The body pitches and rolls because those tire forces transfer load through the suspension.</p>
+          <p className="body-copy body-copy--spaced">The first steering readout is the front-wheel command you can see at the rack and tires; the second is the grip-effective angle used by this teaching model. Hard braking and hard cornering compete for the same contact-patch capability.</p>
           <Note>The simplified model trims effective steering as the shared tire budget fills. A demand near 100% means there is almost no grip left for another command; a real tire asked for more begins to slide.</Note>
         </section>
 

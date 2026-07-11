@@ -2,15 +2,19 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  DRIVETRAIN_EFFICIENCY,
   FINAL_DRIVE_RATIO,
   IDLE_RPM,
+  STOICHIOMETRIC_AIR_FUEL_RATIO,
   clamp,
   drivetrainOutput,
   engineOutput,
   engineTorqueNm,
+  gasolineMixtureOutput,
   getGearRatio,
   steeringOutput,
   stepVehicle,
+  transmissionKinematics,
 } from './physics.js'
 
 function assertFiniteTree(value, path = 'value') {
@@ -28,6 +32,75 @@ test('clamp keeps values inside an inclusive interval', () => {
   assert.equal(clamp(-2, 0, 1), 0)
   assert.equal(clamp(0.4, 0, 1), 0.4)
   assert.equal(clamp(3, 0, 1), 1)
+})
+
+test('gasoline mixture output anchors stoichiometric combustion at 14.7:1', () => {
+  const mixture = gasolineMixtureOutput(1)
+
+  assert.equal(mixture.equivalenceRatio, 1)
+  assert.equal(mixture.airFuelRatio, STOICHIOMETRIC_AIR_FUEL_RATIO)
+  assert.equal(mixture.combustionQuality, 1)
+  assert.equal(mixture.torqueMultiplier, 1)
+  assert.equal(mixture.powerMultiplier, mixture.torqueMultiplier)
+  assert.equal(mixture.fuelConsumptionMultiplier, 1)
+  assert.equal(mixture.exhaustHeatTendency, 1)
+  assert.equal(mixture.status, 'stoichiometric')
+})
+
+test('gasoline mixture status distinguishes lean and rich operating regions', () => {
+  const cases = [
+    [0.65, 'too-lean'],
+    [0.85, 'lean'],
+    [1, 'stoichiometric'],
+    [1.15, 'rich'],
+    [1.4, 'too-rich'],
+  ]
+
+  for (const [equivalenceRatio, status] of cases) {
+    assert.equal(gasolineMixtureOutput(equivalenceRatio).status, status)
+  }
+
+  assert.ok(gasolineMixtureOutput(0.85).airFuelRatio > STOICHIOMETRIC_AIR_FUEL_RATIO)
+  assert.ok(gasolineMixtureOutput(1.15).airFuelRatio < STOICHIOMETRIC_AIR_FUEL_RATIO)
+})
+
+test('best-power richness is modest while extreme mixtures lose useful output', () => {
+  const tooLean = gasolineMixtureOutput(0.65)
+  const stoichiometric = gasolineMixtureOutput(1)
+  const bestPower = gasolineMixtureOutput(1.1)
+  const tooRich = gasolineMixtureOutput(1.45)
+
+  assert.ok(bestPower.torqueMultiplier > stoichiometric.torqueMultiplier)
+  assert.ok(tooLean.torqueMultiplier < stoichiometric.torqueMultiplier)
+  assert.ok(tooRich.torqueMultiplier < stoichiometric.torqueMultiplier)
+  assert.ok(tooLean.combustionQuality < stoichiometric.combustionQuality)
+  assert.ok(tooRich.combustionQuality < stoichiometric.combustionQuality)
+})
+
+test('mixture fuel dose rises with richness while heat peaks near stoichiometric', () => {
+  const lean = gasolineMixtureOutput(0.85)
+  const stoichiometric = gasolineMixtureOutput(1)
+  const rich = gasolineMixtureOutput(1.25)
+
+  assert.equal(lean.fuelConsumptionMultiplier, 0.85)
+  assert.equal(rich.fuelConsumptionMultiplier, 1.25)
+  assert.ok(lean.exhaustHeatTendency < stoichiometric.exhaustHeatTendency)
+  assert.ok(rich.exhaustHeatTendency < stoichiometric.exhaustHeatTendency)
+})
+
+test('gasoline mixture output clamps and sanitizes invalid controls', () => {
+  const invalid = gasolineMixtureOutput(Number.NaN)
+  const tooLow = gasolineMixtureOutput(-10)
+  const tooHigh = gasolineMixtureOutput(10)
+
+  assert.equal(invalid.equivalenceRatio, 1)
+  assert.equal(tooLow.equivalenceRatio, 0.5)
+  assert.equal(tooLow.status, 'too-lean')
+  assert.equal(tooHigh.equivalenceRatio, 1.6)
+  assert.equal(tooHigh.status, 'too-rich')
+  assertFiniteTree(invalid, 'gasolineMixtureOutput.invalid')
+  assertFiniteTree(tooLow, 'gasolineMixtureOutput.tooLow')
+  assertFiniteTree(tooHigh, 'gasolineMixtureOutput.tooHigh')
 })
 
 test('gear ratios cover reverse, neutral, and six forward gears', () => {
@@ -79,6 +152,60 @@ test('a disabled spark removes combustion torque without pretending fuel vanishe
   assert.ok(misfiring.torqueNm < 0)
   assert.equal(misfiring.efficiency, 0)
   assert.ok(misfiring.fuelRateGps > 0)
+})
+
+test('engine output applies mixture to useful torque, fuel rate, and efficiency', () => {
+  const lean = engineOutput({ rpm: 3500, throttle: 0.8, equivalenceRatio: 0.7 })
+  const balanced = engineOutput({ rpm: 3500, throttle: 0.8, equivalenceRatio: 1 })
+  const richPower = engineOutput({ rpm: 3500, throttle: 0.8, equivalenceRatio: 1.1 })
+  const tooRich = engineOutput({ rpm: 3500, throttle: 0.8, equivalenceRatio: 1.5 })
+
+  assert.ok(lean.torqueNm < balanced.torqueNm)
+  assert.ok(richPower.torqueNm > balanced.torqueNm)
+  assert.ok(tooRich.torqueNm < balanced.torqueNm)
+  assert.ok(lean.fuelRateGps < balanced.fuelRateGps)
+  assert.ok(tooRich.fuelRateGps > balanced.fuelRateGps)
+  assert.ok(tooRich.efficiency < balanced.efficiency)
+  assert.equal(richPower.mixture.status, 'rich')
+})
+
+test('transmission kinematics exposes the low-gear torque and high-gear speed trade', () => {
+  const shared = { engineRpm: 3000, engineTorque: 200, speed: 18, wheelRadius: 0.31 }
+  const first = transmissionKinematics({ ...shared, gear: 1 })
+  const fourth = transmissionKinematics({ ...shared, gear: 4 })
+  const neutral = transmissionKinematics({ ...shared, gear: 0 })
+
+  assert.ok(first.inputRpm > fourth.inputRpm)
+  assert.ok(first.gearboxOutputTorque > fourth.gearboxOutputTorque)
+  assert.ok(first.wheelTorque > fourth.wheelTorque)
+  assert.equal(first.gearboxOutputTorque, 200 * getGearRatio(1) * DRIVETRAIN_EFFICIENCY)
+  assert.equal(first.wheelTorque, first.gearboxOutputTorque * FINAL_DRIVE_RATIO)
+  assert.equal(neutral.connected, false)
+  assert.equal(neutral.inputRpm, 0)
+  assert.equal(neutral.gearboxOutputTorque, 0)
+  assertFiniteTree(first, 'transmissionKinematics.first')
+})
+
+test('transmission torque transfer fades without changing the selected ratio', () => {
+  const engaged = transmissionKinematics({ engineRpm: 3200, engineTorque: 220, speed: 14, gear: 2, torqueTransfer: 1 })
+  const releasing = transmissionKinematics({ engineRpm: 3200, engineTorque: 220, speed: 14, gear: 2, torqueTransfer: 0.25 })
+  const open = transmissionKinematics({ engineRpm: 3200, engineTorque: 220, speed: 14, gear: 2, torqueTransfer: 0 })
+
+  assert.equal(releasing.gearRatio, engaged.gearRatio)
+  assert.equal(releasing.gearboxOutputTorque, engaged.gearboxOutputTorque * 0.25)
+  assert.equal(open.gearboxOutputTorque, 0)
+})
+
+test('drivetrain torque transfer opens the road-force path during a shift', () => {
+  const shared = { engineTorque: 210, gear: 2, speed: 12 }
+  const engaged = drivetrainOutput({ ...shared, torqueTransfer: 1 })
+  const applying = drivetrainOutput({ ...shared, torqueTransfer: 0.45 })
+  const open = drivetrainOutput({ ...shared, torqueTransfer: 0 })
+
+  assert.equal(applying.wheelTorque, engaged.wheelTorque * 0.45)
+  assert.equal(open.wheelTorque, 0)
+  assert.equal(open.tractionLimitedForce, 0)
+  assert.equal(applying.torqueTransfer, 0.45)
 })
 
 test('neutral disconnects the engine while road loads slow a moving car', () => {

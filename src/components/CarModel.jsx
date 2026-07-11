@@ -242,6 +242,7 @@ function Seat({ x, z, opacity }) {
 
 function Wheel({ position, steer = 0, speed = 0, brake = 0, explode = 0, focus = 'all', front = false }) {
   const rotating = useRef()
+  const steeringPivot = useRef()
   const side = Math.sign(position[0])
   const explodedPosition = [position[0] + side * explode * CAR_HUB_EXPLODE_OFFSET, position[1], position[2]]
   const tireOffset = side * explode * (CAR_TIRE_EXPLODE_OFFSET - CAR_HUB_EXPLODE_OFFSET)
@@ -252,9 +253,12 @@ function Wheel({ position, steer = 0, speed = 0, brake = 0, explode = 0, focus =
   const rotorHeat = brake * THREE.MathUtils.clamp(Math.abs(speed) / 3, 0, 1)
   useFrame((_, delta) => {
     if (rotating.current) rotating.current.rotation.x -= speed * delta / .31
+    if (front && steeringPivot.current) {
+      steeringPivot.current.rotation.y = THREE.MathUtils.damp(steeringPivot.current.rotation.y, steer, 13, delta)
+    }
   })
   return (
-    <group position={explodedPosition} rotation={[0, front ? steer : 0, 0]}>
+    <group ref={steeringPivot} position={explodedPosition} rotation={[0, front ? steer : 0, 0]}>
       <group ref={rotating}>
         <group position={[tireOffset, 0, 0]}>
           <mesh rotation={[0, Math.PI / 2, 0]} castShadow>
@@ -340,6 +344,46 @@ function DriveShaft({ y = -.14, startZ = -.08, endZ = 1.55, speed = 0, opacity =
   )
 }
 
+function SteeringWheel({ position, steerRadians, opacity }) {
+  const rotating = useRef()
+  useFrame((_, delta) => {
+    if (!rotating.current) return
+    rotating.current.rotation.z = THREE.MathUtils.damp(
+      rotating.current.rotation.z,
+      steerRadians * 14.5,
+      11,
+      delta,
+    )
+  })
+  const materialProps = { transparent: true, opacity, depthTest: false, depthWrite: false }
+  return (
+    <group position={position} rotation={[-.18, 0, 0]} renderOrder={28}>
+      <group ref={rotating}>
+        <mesh renderOrder={28}>
+          <torusGeometry args={[.26, .035, 9, 26]} />
+          <meshBasicMaterial color={COLORS.steering} {...materialProps} />
+        </mesh>
+        {[0, Math.PI * 2 / 3, Math.PI * 4 / 3].map((angle) => (
+          <group key={angle} rotation={[0, 0, angle]}>
+            <mesh position={[0, .115, 0]} renderOrder={28}>
+              <boxGeometry args={[.035, .23, .025]} />
+              <meshBasicMaterial color={COLORS.steering} {...materialProps} />
+            </mesh>
+          </group>
+        ))}
+        <mesh renderOrder={28}>
+          <sphereGeometry args={[.065, 12, 9]} />
+          <meshBasicMaterial color={COLORS.cream} {...materialProps} />
+        </mesh>
+        <mesh position={[0, .255, .01]} renderOrder={29}>
+          <sphereGeometry args={[.042, 10, 8]} />
+          <meshBasicMaterial color={COLORS.combustion} {...materialProps} />
+        </mesh>
+      </group>
+    </group>
+  )
+}
+
 function SystemLabels({ focus, wheelX, gear, positions }) {
   if (focus === 'all' || focus === 'drive' || focus === 'live' || focus === 'body' || focus === 'forces') return null
   if (focus === 'fuel') return <><PartLabel position={positions.fuelTank} color="#9b741b">FUEL TANK</PartLabel><PartLabel position={positions.fuelRail} color="#9b741b">FUEL RAIL + INJECTORS</PartLabel></>
@@ -364,6 +408,7 @@ export function CarModel({
   suspensionLoad = 0,
   commands = {},
 }) {
+  const rackVisual = useRef()
   const steerRadians = steering * Math.PI / 180
   const wheelX = 1.57 + explode * CAR_HUB_EXPLODE_OFFSET
   const drivetrainConnected = gear !== 'N'
@@ -377,7 +422,8 @@ export function CarModel({
   const powerOpacity = responsiveSystemOpacity(focus, 'power', powerActive)
   const fuelOpacity = responsiveSystemOpacity(focus, 'fuel', gasActive)
   const brakeOpacity = responsiveSystemOpacity(focus, 'brakes', brakeActive)
-  const steeringOpacity = responsiveSystemOpacity(focus, 'steering', steeringActive)
+  const steeringBaseOpacity = responsiveSystemOpacity(focus, 'steering', steeringActive)
+  const steeringOpacity = steeringActive ? Math.max(.92, steeringBaseOpacity) : steeringBaseOpacity
   const suspensionOpacity = responsiveSystemOpacity(focus, 'suspension', suspensionActive)
   const engineY = explode * .55
   const engineZ = -1.72 - explode * .42
@@ -398,6 +444,10 @@ export function CarModel({
   const rackY = -.01 - explode * .12
   const rackZ = -1.88 - explode * .4
   const rackShift = steerRadians * .46
+  useFrame((_, delta) => {
+    if (!rackVisual.current) return
+    rackVisual.current.position.x = THREE.MathUtils.damp(rackVisual.current.position.x, rackShift, 13, delta)
+  })
   const panelOpacity = THREE.MathUtils.lerp(
     bodyOpacity,
     focus === 'body' ? .52 : focus === 'all' || focus === 'drive' || focus === 'live' ? .18 : .12,
@@ -483,9 +533,12 @@ export function CarModel({
       </group>
 
       <group visible={steeringOpacity > .02}>
-        <mesh position={[-.58, steeringWheelY, steeringWheelZ]} rotation={[Math.PI / 2, 0, steerRadians * 4]}>
-          <torusGeometry args={[.26, .035, 9, 26]} /><meshStandardMaterial color={COLORS.steering} transparent opacity={steeringOpacity} /></mesh>
-        <RoundedPiece size={[2.35, .16, .18]} position={[rackShift, rackY, rackZ]} color={COLORS.steering} opacity={steeringOpacity} radius={.06} />
+        <SteeringWheel position={[-.58, steeringWheelY, steeringWheelZ]}
+          steerRadians={steerRadians} opacity={steeringOpacity} />
+        <group ref={rackVisual} position={[rackShift, 0, 0]}>
+          <RoundedPiece size={[2.35, .16, .18]} position={[0, rackY, rackZ]}
+            color={COLORS.steering} opacity={steeringOpacity} radius={.06} />
+        </group>
         <Tube start={[rackShift - 1.02, rackY, rackZ]} end={[-wheelX, -.04, FRONT_AXLE_Z]}
           color={COLORS.steering} radius={.045} opacity={steeringOpacity} xray />
         <Tube start={[rackShift + 1.02, rackY, rackZ]} end={[wheelX, -.04, FRONT_AXLE_Z]}

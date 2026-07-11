@@ -1,18 +1,50 @@
 import { OrbitControls, useCursor } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { ArrowDown, ArrowUp, Play } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { ExplodedMechanismModel } from '../components/ExplodedMechanismModel.jsx'
 import { MotionDrivetrainModel } from '../components/MotionDrivetrainModel.jsx'
 import { RenderFallback, ResetButton, SceneBadge, SectionHeader, Segmented, Slider } from '../components/LabUI.jsx'
 import { ForceArrow, StudioFloor, StudioLights } from '../components/SceneKit.jsx'
-import { MOTION_PARTS } from '../motionParts.js'
-import { drivetrainOutput, engineOutput, getGearRatio, stepVehicle } from '../physics.js'
+import { MOTION_PARTS, TEACHING_GEAR_APPLICATIONS } from '../motionParts.js'
+import { REDLINE_RPM, drivetrainOutput, engineOutput, getGearRatio, stepVehicle, transmissionKinematics } from '../physics.js'
 import { usePerspectiveInput } from '../usePerspectiveInput.js'
 
 const INITIAL = { speed: 0, rpm: 850, heading: 0, x: 0, z: 0, gear: 1, mass: 1450, wheelRadius: 0.31, wheelbase: 2.7 }
 const PART_BY_ID = Object.fromEntries(MOTION_PARTS.map((part) => [part.id, part]))
 const FOUR_CYLINDER_EVENTS = [0, 180, 360, 540]
+const SHIFT_PHASES = [
+  { id: 'torque-cut', label: 'Unload old clutch pair' },
+  { id: 'release', label: 'Release old pair' },
+  { id: 'select', label: 'Route pressure to new pair' },
+  { id: 'apply', label: 'Clamp new pair' },
+]
+const SHIFT_TRANSFER = { 'torque-cut': 0.32, release: 0, select: 0, apply: 0.55 }
+const SHIFT_TIMING = { release: 650, select: 1350, apply: 2100, complete: 3000 }
+const SHIFT_DEMO_SPACING = 3400
+const GEAR_ROLES = [
+  { gear: 1, role: 'Launch', note: 'Most wheel torque' },
+  { gear: 2, role: 'Accelerate', note: 'Smaller step' },
+  { gear: 3, role: 'Road speed', note: 'Speed rises' },
+  { gear: 4, role: 'Cruise', note: 'Near direct drive' },
+]
+const STUDY_GEARS = [0, 1, 2, 3, 4]
+
+function clutchPairLabel(application) {
+  if (!application?.circuits.length) return 'No clutch pair applied'
+  return application.circuits.map((circuit) => `${circuit.id} ${circuit.label}`).join(' + ')
+}
+
+function shiftSelectionMessage(shift, application) {
+  const pair = clutchPairLabel(application)
+  if (!shift) return `${pair} remain clamped, holding the selected ratio.`
+  if (shift.stage === 'torque-cut') return 'Engine torque falls first so the loaded friction plates can separate cleanly.'
+  if (shift.stage === 'release') return 'The old clutch pair opens. Input and output are briefly disconnected.'
+  if (shift.stage === 'select') return `The valve-body spool moves and routes hydraulic pressure toward ${pair}.`
+  if (shift.stage === 'apply') return `${pair} squeeze together; torque rises as the new ratio takes the load.`
+  return `${pair} establish the selected ratio.`
+}
 
 function CylinderCountLesson({ rpm }) {
   const eventsPerSecond = Math.max(0, rpm) * FOUR_CYLINDER_EVENTS.length / 120
@@ -56,10 +88,9 @@ function MovingRoadMarks({ speed }) {
   )
 }
 
-function MotionScene({ speed, rpm, throttle, gear, roadForce, activePart, hoveredPart, onHover, onSelect, perspectiveInputRef, viewResetSignal, studyPartId }) {
+function MotionScene({ speed, rpm, throttle, gear, engagedGear, requestedGear, torqueTransfer, shiftStage, roadForce, brake, brakePressureBar, brakeForce, transmission, activePart, hoveredPart, onHover, onSelect, perspectiveInputRef, viewResetSignal, studyPartId }) {
   const { camera, size } = useThree()
   const controls = useRef()
-  const canvasSize = useRef(size)
   const cameraTarget = useRef(new THREE.Vector3(0, -0.05, 0))
   const overviewPosition = useRef(new THREE.Vector3(6.8, 4.6, 7.4))
   const overviewTarget = useRef(new THREE.Vector3(0, -0.05, 0))
@@ -69,12 +100,10 @@ function MotionScene({ speed, rpm, throttle, gear, roadForce, activePart, hovere
   useCursor(Boolean(hoveredPart) && !studyPartId)
   const forceLength = Math.min(2.5, Math.max(0, roadForce) / 2200)
   const showForce = forceLength > 0.08
-
-  useEffect(() => { canvasSize.current = size }, [size])
+  const narrowStudy = Boolean(studyPartId) && size.width / size.height < 1
+  const studyTargetX = studyPartId === 'gearbox' && !narrowStudy ? -.62 : 0
 
   useEffect(() => {
-    const { width, height } = canvasSize.current
-    const narrowStudy = studyPartId && width / height < 1
     const wasStudying = Boolean(previousStudy.current)
     const explicitReset = previousResetSignal.current !== viewResetSignal
     if (studyPartId && !wasStudying) {
@@ -82,7 +111,7 @@ function MotionScene({ speed, rpm, throttle, gear, roadForce, activePart, hovere
       overviewTarget.current.copy(controls.current?.target || cameraTarget.current)
     }
     if (studyPartId) {
-      cameraTarget.current.set(0, 0, 0)
+      cameraTarget.current.set(studyTargetX, 0, 0)
       camera.position.set(...(narrowStudy ? [7.8, 4.8, 8.9] : [5.6, 3.5, 6.4]))
     } else if (wasStudying && !explicitReset) {
       cameraTarget.current.copy(overviewTarget.current)
@@ -98,7 +127,7 @@ function MotionScene({ speed, rpm, throttle, gear, roadForce, activePart, hovere
     }
     previousStudy.current = studyPartId
     previousResetSignal.current = viewResetSignal
-  }, [camera, studyPartId, viewResetSignal])
+  }, [camera, narrowStudy, studyPartId, studyTargetX, viewResetSignal])
 
   useFrame((_, delta) => {
     const input = perspectiveInputRef.current
@@ -120,24 +149,29 @@ function MotionScene({ speed, rpm, throttle, gear, roadForce, activePart, hovere
       <StudioLights />
       <StudioFloor size={20} color={studyPartId ? '#e8cc91' : '#d9bd83'} y={studyPartId ? -2.25 : -0.59} />
       {studyPartId ? (
-        <ExplodedMechanismModel partId={studyPartId} rpm={rpm} speed={speed} throttle={throttle} gear={gear} roadForce={roadForce} />
+        <ExplodedMechanismModel partId={studyPartId} rpm={rpm} speed={speed} throttle={throttle} gear={gear}
+          engagedGear={engagedGear} targetGear={requestedGear} torqueTransfer={torqueTransfer} shiftStage={shiftStage || 'engaged'}
+          inputRpm={transmission.inputRpm} outputRpm={transmission.outputRpm}
+          gearboxTorque={transmission.gearboxOutputTorque} wheelTorque={transmission.wheelTorque} roadForce={roadForce}
+          brake={brake} brakePressureBar={brakePressureBar} brakeForce={brakeForce} />
       ) : (
         <>
           <MovingRoadMarks speed={speed} />
           <MotionDrivetrainModel activePart={activePart} onHover={onHover} onSelect={onSelect}
-            rpm={rpm} speed={speed} throttle={throttle} gear={gear} roadForce={roadForce} />
+            rpm={rpm} speed={speed} throttle={throttle} gear={gear} roadForce={roadForce}
+            brake={brake} brakePressureBar={brakePressureBar} />
         </>
       )}
       {!studyPartId && showForce && (
         <>
           <ForceArrow from={[-1.18, -0.53, 1.74]} direction={[0, 0, -1]} length={forceLength}
-            color="#28778c" label="ROAD PUSHES CAR FORWARD" />
+            color="#28778c" label={size.width < 500 ? 'ROAD → CAR' : 'ROAD PUSHES CAR FORWARD'} />
           <ForceArrow from={[1.18, -0.55, 1.74]} direction={[0, 0, 1]} length={forceLength}
-            color="#e6543f" label="TIRE PUSHES ROAD BACK" />
+            color="#e6543f" label={size.width < 500 ? 'TIRE → ROAD' : 'TIRE PUSHES ROAD BACK'} />
         </>
       )}
       <OrbitControls ref={controls} makeDefault enablePan={false} minDistance={studyPartId ? 4.2 : 6.7} maxDistance={studyPartId ? 16 : 15}
-        target={[0, studyPartId ? 0 : -0.05, 0]} minPolarAngle={0.34} maxPolarAngle={Math.PI * 0.47} />
+        target={[studyTargetX, studyPartId ? 0 : -0.05, 0]} minPolarAngle={0.34} maxPolarAngle={Math.PI * 0.47} />
     </>
   )
 }
@@ -145,7 +179,11 @@ function MotionScene({ speed, rpm, throttle, gear, roadForce, activePart, hovere
 export default function MotionLab() {
   const { perspectiveInputRef, releasePerspective } = usePerspectiveInput()
   const [throttle, setThrottle] = useState(42)
+  const [brake, setBrake] = useState(0)
   const [gear, setGear] = useState(1)
+  const [requestedGear, setRequestedGear] = useState(1)
+  const [shift, setShift] = useState(null)
+  const [shiftMessage, setShiftMessage] = useState('Gear 1 engaged')
   const [vehicle, setVehicle] = useState(() => stepVehicle(INITIAL, { throttle: 0.42, gear: 1 }, 0))
   const [hoveredPart, setHoveredPart] = useState(null)
   const [selectedPart, setSelectedPart] = useState('engine')
@@ -155,23 +193,56 @@ export default function MotionLab() {
   const [viewResetSignal, setViewResetSignal] = useState(0)
   const studyFocusRef = useRef()
   const shouldFocusStudyBack = useRef(false)
+  const shiftTimers = useRef([])
+  const demoTimers = useRef([])
+  const requestShiftRef = useRef()
+
+  const torqueTransfer = shift ? SHIFT_TRANSFER[shift.stage] ?? 0 : 1
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setVehicle((current) => stepVehicle(current, { throttle: throttle / 100, gear }, 0.05))
+      setVehicle((current) => stepVehicle(current, {
+        throttle: throttle / 100,
+        brake: brake / 100,
+        gear,
+        torqueTransfer,
+      }, 0.05))
     }, 50)
     return () => window.clearInterval(timer)
-  }, [gear, throttle])
+  }, [brake, gear, throttle, torqueTransfer])
 
   const output = vehicle.engine || engineOutput({ rpm: vehicle.rpm, throttle: throttle / 100 })
-  const drivetrain = vehicle.drivetrain || drivetrainOutput({ engineTorque: output.torqueNm, gear, speed: vehicle.speed })
+  const drivetrain = vehicle.drivetrain || drivetrainOutput({
+    engineTorque: output.torqueNm,
+    gear,
+    speed: vehicle.speed,
+    brake: brake / 100,
+    torqueTransfer,
+  })
+  const transmission = transmissionKinematics({
+    engineRpm: vehicle.rpm,
+    engineTorque: output.torqueNm,
+    speed: vehicle.speed,
+    wheelRadius: INITIAL.wheelRadius,
+    gear,
+    torqueTransfer,
+  })
   const gearRatio = getGearRatio(gear)
-  const gearboxTorque = output.torqueNm * gearRatio * 0.9
+  const gearboxTorque = transmission.gearboxOutputTorque
+  const displayedGear = shift && (shift.stage === 'select' || shift.stage === 'apply')
+    ? shift.to
+    : shift?.from ?? gear
+  const displayedRatio = Math.abs(getGearRatio(displayedGear))
+  const displayedApplication = TEACHING_GEAR_APPLICATIONS[displayedGear] || TEACHING_GEAR_APPLICATIONS[0]
+  const selectionMessage = shiftSelectionMessage(shift, displayedApplication)
   const activePartId = studyPartId || hoveredPart || selectedPart
   const activePart = PART_BY_ID[activePartId] || PART_BY_ID.engine
   const speedKph = Math.abs(vehicle.speed) * 3.6
   const accelerationG = drivetrain.acceleration / 9.81
-  const resistanceForce = drivetrain.aeroDrag + drivetrain.rollingResistance
+  const passiveResistanceForce = drivetrain.aeroDrag + drivetrain.rollingResistance
+  const totalResistanceForce = passiveResistanceForce + drivetrain.brakeForce
+  const brakePressureBar = brake * 0.9
+  const brakingPowerKw = drivetrain.brakeForce * Math.abs(vehicle.speed) / 1000
   const roadForceDirection = drivetrain.tractionLimitedForce > 1 ? 'forward' : drivetrain.tractionLimitedForce < -1 ? 'backward' : null
   const roadForcePhrase = roadForceDirection
     ? `${Math.abs(drivetrain.tractionLimitedForce / 1000).toFixed(1)} kN ${roadForceDirection}`
@@ -185,7 +256,93 @@ export default function MotionLab() {
     shaft: gear === 0 ? 'No driven torque in neutral' : `${gearboxTorque.toFixed(0)} N·m carried toward the rear axle`,
     differential: `${drivetrain.wheelTorque.toFixed(0)} N·m after the 3.90:1 final drive`,
     tires: roadForceDirection ? `${roadForcePhrase} force at the road` : 'No longitudinal force at the road',
+    brakes: `${brakePressureBar.toFixed(0)} bar · ${(drivetrain.brakeForce / 1000).toFixed(1)} kN slowing force · ${brakingPowerKw.toFixed(1)} kW to heat`,
   }
+
+  const clearShiftTimers = useCallback(() => {
+    shiftTimers.current.forEach((timer) => window.clearTimeout(timer))
+    shiftTimers.current = []
+  }, [])
+
+  const clearDemoTimers = useCallback(() => {
+    demoTimers.current.forEach((timer) => window.clearTimeout(timer))
+    demoTimers.current = []
+  }, [])
+
+  const requestShift = useCallback((value) => {
+    const nextGear = Number(value)
+    if (shift) return
+
+    const predicted = transmissionKinematics({
+      engineRpm: vehicle.rpm,
+      engineTorque: output.torqueNm,
+      speed: vehicle.speed,
+      wheelRadius: INITIAL.wheelRadius,
+      gear: nextGear,
+    })
+    if (nextGear > 0 && predicted.inputRpm > REDLINE_RPM) {
+      setShiftMessage(`Shift blocked: gear ${nextGear} would demand ${predicted.inputRpm.toFixed(0)} rpm`)
+      return
+    }
+
+    clearShiftTimers()
+    setRequestedGear(nextGear)
+    if (nextGear === gear && !shift) {
+      setShiftMessage(`${nextGear === 0 ? 'Neutral' : `Gear ${nextGear}`} already engaged`)
+      return
+    }
+
+    const fromGear = shift?.to ?? gear
+    const fromLabel = fromGear === 0 ? 'N' : fromGear
+    const toLabel = nextGear === 0 ? 'N' : nextGear
+    setSelectedPart('gearbox')
+    setShift({ from: fromGear, to: nextGear, stage: 'torque-cut' })
+    setShiftMessage(`${fromLabel} → ${toLabel}: engine torque reduced`)
+
+    shiftTimers.current.push(window.setTimeout(() => {
+      setGear(0)
+      setShift((current) => current ? { ...current, stage: 'release' } : current)
+      setShiftMessage(`${fromLabel} → ${toLabel}: old clutch released; torque path open`)
+    }, SHIFT_TIMING.release))
+    shiftTimers.current.push(window.setTimeout(() => {
+      setShift((current) => current ? { ...current, stage: 'select' } : current)
+      setShiftMessage(`${fromLabel} → ${toLabel}: planetary ratio selected`)
+    }, SHIFT_TIMING.select))
+    shiftTimers.current.push(window.setTimeout(() => {
+      setGear(nextGear)
+      setShift((current) => current ? { ...current, stage: 'apply' } : current)
+      setShiftMessage(`${fromLabel} → ${toLabel}: next clutch applying`)
+    }, SHIFT_TIMING.apply))
+    shiftTimers.current.push(window.setTimeout(() => {
+      setGear(nextGear)
+      setShift(null)
+      setShiftMessage(`${nextGear === 0 ? 'Neutral selected; torque path open' : `Gear ${nextGear} engaged`}`)
+      shiftTimers.current = []
+    }, SHIFT_TIMING.complete))
+  }, [clearShiftTimers, gear, output.torqueNm, shift, vehicle.rpm, vehicle.speed])
+
+  useEffect(() => {
+    requestShiftRef.current = requestShift
+  }, [requestShift])
+
+  const chooseGear = useCallback((value) => {
+    clearDemoTimers()
+    requestShift(value)
+  }, [clearDemoTimers, requestShift])
+
+  const runShiftDemo = useCallback(() => {
+    clearDemoTimers()
+    clearShiftTimers()
+    setVehicle(stepVehicle({ ...INITIAL, speed: 4, rpm: 1900 }, { throttle: throttle / 100, gear: 1 }, 0))
+    setGear(1)
+    setRequestedGear(1)
+    setShift(null)
+    setSelectedPart('gearbox')
+    setShiftMessage('Demo staged in first gear')
+    ;[2, 3, 4].forEach((nextGear, index) => {
+      demoTimers.current.push(window.setTimeout(() => requestShiftRef.current?.(nextGear), 500 + index * SHIFT_DEMO_SPACING))
+    })
+  }, [clearDemoTimers, clearShiftTimers, throttle])
 
   const openStudy = useCallback((id) => {
     shouldFocusStudyBack.current = true
@@ -223,9 +380,20 @@ export default function MotionLab() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [closeStudy, studyPartId])
 
+  useEffect(() => () => {
+    clearShiftTimers()
+    clearDemoTimers()
+  }, [clearDemoTimers, clearShiftTimers])
+
   const reset = () => {
+    clearShiftTimers()
+    clearDemoTimers()
     setThrottle(42)
+    setBrake(0)
     setGear(1)
+    setRequestedGear(1)
+    setShift(null)
+    setShiftMessage('Gear 1 engaged')
     setHoveredPart(null)
     setSelectedPart('engine')
     setStudyPartId(null)
@@ -233,7 +401,6 @@ export default function MotionLab() {
     setViewResetSignal((value) => value + 1)
     setVehicle(stepVehicle(INITIAL, { throttle: 0.42, gear: 1 }, 0))
   }
-  const chooseGear = (value) => { setGear(value); if (!studyPartId) setSelectedPart('gearbox') }
   const retryRenderer = () => { setWebglLost(false); setRendererKey((value) => value + 1) }
   const rendererReady = ({ gl }) => {
     gl.domElement.addEventListener('webglcontextlost', (event) => {
@@ -245,7 +412,7 @@ export default function MotionLab() {
   return (
     <div className="lab-layout lab-layout--cake-box motion-focus-layout">
       <section className="demo-pane demo-pane--motion" aria-label="Hoverable drivetrain showing how engine torque becomes road force">
-        <div className="scene-toolbar"><SceneBadge>{speedKph.toFixed(0)} km/h · gear {gear === 0 ? 'N' : gear}</SceneBadge><ResetButton onClick={reset} /></div>
+        <div className="scene-toolbar"><SceneBadge>{speedKph.toFixed(0)} km/h · {shift ? `${shift.from === 0 ? 'N' : shift.from}→${shift.to === 0 ? 'N' : shift.to}` : `gear ${gear === 0 ? 'N' : gear}`}</SceneBadge><ResetButton onClick={reset} /></div>
         {!studyPartId && <p className="motion-scene-help">Hover to preview · click a part to open it · drag or use arrows to orbit</p>}
         {studyPartId && (
           <div ref={studyFocusRef} className="motion-study-toolbar" style={{ '--part-color': activePart.color }}
@@ -264,11 +431,61 @@ export default function MotionLab() {
             <b>≈ {(Math.max(0, vehicle.rpm) * 4 / 120).toFixed(0)} events/s at {vehicle.rpm.toFixed(0)} rpm</b>
           </div>
         )}
+        {studyPartId === 'gearbox' && (
+          <section className={`motion-shift-deck ${shift ? 'is-shifting' : ''}`}
+            style={{ '--part-color': activePart.color }} aria-label="Shift the exploded transmission">
+            <header>
+              <span>Slow-motion teaching shift</span>
+              <strong>{shift
+                ? `${shift.from === 0 ? 'N' : shift.from} → ${shift.to === 0 ? 'N' : shift.to}`
+                : `${gear === 0 ? 'Neutral' : `Gear ${gear}`} engaged`}</strong>
+            </header>
+            <div className="motion-shift-gears" role="group" aria-label="Choose a transmission gear">
+              {STUDY_GEARS.map((value) => (
+                <button key={value} type="button" onClick={() => chooseGear(value)} disabled={Boolean(shift)}
+                  className={`${requestedGear === value ? 'is-requested' : ''} ${gear === value ? 'is-engaged' : ''}`}
+                  aria-pressed={requestedGear === value} aria-label={value === 0 ? 'Shift to neutral' : `Shift to gear ${value}`}>
+                  <b>{value === 0 ? 'N' : value}</b>
+                  <small>{value === 0 ? 'open' : `${getGearRatio(value).toFixed(2)}:1`}</small>
+                  <i>{gear === value ? (value === 0 ? 'path open' : 'engaged') : 'select'}</i>
+                </button>
+              ))}
+            </div>
+            <div className="motion-ratio-trade" aria-live="polite">
+              {displayedGear === 0 ? (
+                <><span><small>Input</small><b>engine side spins</b></span><i>×</i><span><small>Output</small><b>coasts separately</b></span></>
+              ) : (
+                <><span><small>Input</small><b>{displayedRatio.toFixed(2)} turns</b></span><i>→</i><span><small>Output</small><b>1 turn</b></span><i>·</i><span><small>Torque trade</small><b>≈ {displayedRatio.toFixed(2)}×</b></span></>
+              )}
+            </div>
+            <div className="motion-clutch-command" aria-live="polite">
+              <span>Valve body applies</span>
+              <div>{displayedApplication.circuits.length ? displayedApplication.circuits.map((circuit) => (
+                <b key={circuit.id}><i>{circuit.id}</i>{circuit.label}</b>
+              )) : <b className="is-open">No clutch pair · torque path open</b>}</div>
+              <p>{selectionMessage}</p>
+              <small>{Math.round(torqueTransfer * 100)}% torque crossing · functional teaching chart; exact clutch combinations vary.</small>
+            </div>
+            <div className="motion-shift-phases" aria-label={shiftMessage}>
+              {SHIFT_PHASES.map((phase, index) => (
+                <span key={phase.id} className={shift?.stage === phase.id ? 'is-active' : ''}>
+                  <b>{index + 1}</b>{phase.label}
+                </span>
+              ))}
+            </div>
+            <button type="button" className="motion-shift-demo" onClick={runShiftDemo} disabled={Boolean(shift)}>
+              <Play size={13} /> Run the automatic 1→4 demo
+            </button>
+          </section>
+        )}
         {webglLost ? <RenderFallback onRetry={retryRenderer} /> : (
           <Canvas key={rendererKey} camera={{ position: [6.8, 4.6, 7.4], fov: 40 }} shadows dpr={[1, 1.35]}
             style={{ cursor: !studyPartId && hoveredPart ? 'pointer' : 'grab' }} onCreated={rendererReady} fallback={<RenderFallback onRetry={retryRenderer} />}>
             <MotionScene speed={vehicle.speed} rpm={vehicle.rpm} throttle={throttle / 100} gear={gear}
-              roadForce={drivetrain.tractionLimitedForce} activePart={activePartId} hoveredPart={hoveredPart}
+              engagedGear={shift?.from ?? gear} requestedGear={requestedGear} torqueTransfer={torqueTransfer} shiftStage={shift?.stage || null}
+              roadForce={drivetrain.tractionLimitedForce} brake={brake / 100} brakePressureBar={brakePressureBar}
+              brakeForce={drivetrain.brakeForce} transmission={transmission}
+              activePart={activePartId} hoveredPart={hoveredPart}
               onHover={setHoveredPart} onSelect={openStudy} perspectiveInputRef={perspectiveInputRef}
               viewResetSignal={viewResetSignal} studyPartId={studyPartId} />
           </Canvas>
@@ -290,7 +507,7 @@ export default function MotionLab() {
         ) : (
           <div className="motion-torque-strip" aria-label="Live torque path">
             <span><small>Engine</small><b>{output.torqueNm.toFixed(0)} N·m</b></span>
-            <i>× {gearRatio.toFixed(2)} gear × 3.90 final × 0.90</i>
+            <i>× {gearRatio.toFixed(2)} gear × 3.90 final × 0.90{shift ? ` × ${torqueTransfer.toFixed(2)} clutch` : ''}</i>
             <span><small>Driven wheels</small><b>{drivetrain.wheelTorque.toFixed(0)} N·m</b></span>
             <i>÷ 0.31 m tire</i>
             <span><small>Road on car</small><b>{(drivetrain.tractionLimitedForce / 1000).toFixed(1)} kN</b></span>
@@ -308,11 +525,26 @@ export default function MotionLab() {
             onChange={(value) => { setThrottle(value); if (!studyPartId) setSelectedPart('metering') }}
             hint="Requests more engine torque by admitting more air and matching fuel." />
           <div className="gear-selector">
-            <span>Selected gear</span>
-            <Segmented label="Transmission gear" value={gear} onChange={chooseGear}
+            <div className="gear-control-heading"><span>Requested gear</span><b>{gear === 0 ? 'N' : gear} mechanically engaged</b></div>
+            <Segmented label="Transmission gear" value={requestedGear} onChange={chooseGear}
               options={[{ value: 0, label: 'N' }, 1, 2, 3, 4].map((value) => typeof value === 'number' ? { value, label: String(value) } : value)} />
+            <div className="shift-command-row">
+              <button type="button" onClick={() => chooseGear(Math.max(1, requestedGear - 1))} disabled={requestedGear <= 1 || Boolean(shift)}><ArrowDown size={14} /> Shift down</button>
+              <button type="button" onClick={() => chooseGear(Math.min(4, Math.max(1, requestedGear + 1)))} disabled={requestedGear >= 4 || Boolean(shift)}><ArrowUp size={14} /> Shift up</button>
+              <button type="button" onClick={runShiftDemo} disabled={Boolean(shift)}><Play size={14} /> 1→4 demo</button>
+            </div>
+            <div className="shift-status" aria-live="polite">
+              <strong>{shiftMessage}</strong>
+              <div>{SHIFT_PHASES.map((phase) => <span key={phase.id} className={shift?.stage === phase.id ? 'is-active' : ''}>{phase.label}</span>)}</div>
+            </div>
+            <div className="gear-role-map" aria-label="What each forward gear is for">
+              {GEAR_ROLES.map((item) => <span key={item.gear} className={requestedGear === item.gear ? 'is-active' : ''}><b>{item.gear}</b><strong>{item.role}</strong><small>{getGearRatio(item.gear).toFixed(2)}:1 · {item.note}</small></span>)}
+            </div>
           </div>
-          <p>Try first gear, then fourth: the engine can make similar torque while wheel torque changes dramatically.</p>
+          <Slider label="Brake pedal" value={brake} min={0} max={100} unit="%" accent="#28778c"
+            onChange={(value) => { setBrake(value); if (!studyPartId) setSelectedPart('brakes') }}
+            hint={`${brakePressureBar.toFixed(0)} bar teaching pressure · ${(drivetrain.brakeForce / 1000).toFixed(1)} kN slowing force`} />
+          <p>Low gears multiply torque for launch. Higher gears trade multiplication for wheel speed. The brake pedal builds hydraulic pressure, but the tire-road contact patches are what slow the whole car.</p>
         </section>
 
         <section id="motion-part-study" className={`motion-part-inspector ${studyPartId ? 'is-study' : ''}`} style={{ '--part-color': activePart.color }} aria-label={`${activePart.name} explanation`}>
@@ -323,6 +555,37 @@ export default function MotionLab() {
             <>
               <div className="motion-study-steps">{activePart.studyFlow.map((item, index) => <span key={item}><b>{index + 1}</b>{item}</span>)}</div>
               {studyPartId === 'engine' && <CylinderCountLesson rpm={vehicle.rpm} />}
+              {studyPartId === 'gearbox' && (
+                <section className="gearbox-live-lesson" aria-label="Live automatic transmission shift">
+                  <header><span>Live ratio trade</span><strong>{gear === 0 ? 'Torque path open' : `Gear ${gear} · ${gearRatio.toFixed(2)}:1`}</strong></header>
+                  <div className="gearbox-live-readouts">
+                    <span><small>Engine</small><b>{vehicle.rpm.toFixed(0)} rpm</b></span>
+                    <span><small>Gearbox input</small><b>{transmission.inputRpm.toFixed(0)} rpm</b></span>
+                    <span><small>Output</small><b>{transmission.outputRpm.toFixed(0)} rpm</b></span>
+                    <span><small>Output torque</small><b>{gearboxTorque.toFixed(0)} N·m</b></span>
+                    <span><small>Converter slip</small><b>{transmission.converterSlipRpm.toFixed(0)} rpm</b></span>
+                  </div>
+                  <p><strong>The gearbox keeps the engine in a useful rpm range.</strong> First gear turns the output slowly with a large torque multiplication. Fourth is near direct drive, so the same engine rotation produces more road speed with less multiplication.</p>
+                  <div className="gearbox-application-chart" aria-label="Teaching clutch application chart">
+                    {GEAR_ROLES.map((item) => {
+                      const application = TEACHING_GEAR_APPLICATIONS[item.gear]
+                      return <span key={item.gear} className={displayedGear === item.gear ? 'is-active' : ''}>
+                        <b>G{item.gear}</b><strong>{application.circuits.map((circuit) => circuit.id).join(' + ')}</strong>
+                        <small>{application.circuits.map((circuit) => circuit.label).join(' · ')}</small>
+                      </span>
+                    })}
+                  </div>
+                  <p className="gearbox-chart-note">This is a functional four-speed application chart. Real gearboxes may use different element names, but all select ratios by applying a specific clutch-and-brake combination.</p>
+                  <div className="gearbox-clutch-sequence">{SHIFT_PHASES.map((phase, index) => <span key={phase.id} className={shift?.stage === phase.id ? 'is-active' : ''}><b>{index + 1}</b>{phase.label}</span>)}</div>
+                </section>
+              )}
+              {studyPartId === 'brakes' && (
+                <section className="brake-live-lesson" aria-label="Live hydraulic brake mechanics">
+                  <header><span>Pedal to road</span><strong>{brakePressureBar.toFixed(0)} bar in the hydraulic lines</strong></header>
+                  <div><span><small>Pedal</small><b>{brake}%</b></span><i>→</i><span><small>Caliper clamp</small><b>{(brake * 0.055).toFixed(1)} kN</b></span><i>→</i><span><small>Tire force</small><b>{(drivetrain.brakeForce / 1000).toFixed(1)} kN</b></span><i>→</i><span><small>Heat</small><b>{brakingPowerKw.toFixed(1)} kW</b></span></div>
+                  <p><strong>Fluid transmits pressure; it does not directly stop the car.</strong> Calipers squeeze rotors to resist wheel rotation. The tires then push the road forward, and the road pushes the car backward. Kinetic energy becomes heat in the rotors and pads.</p>
+                </section>
+              )}
               <div className="motion-internals"><strong>Parts separated in this study</strong><ul>{activePart.internals.map((item) => <li key={item}>{item}</li>)}</ul></div>
               {studyPartId === 'engine' && <a className="motion-engine-link" href="#engine">Open the full Engine Mechanics lab →</a>}
             </>
@@ -335,7 +598,7 @@ export default function MotionLab() {
             <li><b>1</b><p><strong>The engine makes twist.</strong><span>Combustion pressure becomes {output.torqueNm.toFixed(0)} N·m at the crankshaft.</span></p></li>
             <li><b>2</b><p><strong>Gears trade speed for torque.</strong><span>{output.torqueNm.toFixed(0)} × {gearRatio.toFixed(2)} × 3.90 × 0.90 = {drivetrain.wheelTorque.toFixed(0)} N·m at the driven wheels.</span></p></li>
             <li><b>3</b><p><strong>The tire radius turns twist into force.</strong><span>{drivetrain.wheelTorque.toFixed(0)} N·m ÷ 0.31 m = {(drivetrain.driveForce / 1000).toFixed(1)} kN requested at the road.</span></p></li>
-            <li><b>4</b><p><strong>The road accelerates the car.</strong><span>Grip supplies {roadForcePhrase}; resistance removes {(resistanceForce / 1000).toFixed(1)} kN, leaving {accelerationG >= 0 ? '+' : ''}{accelerationG.toFixed(2)} g.</span></p></li>
+            <li><b>4</b><p><strong>The road accelerates or slows the car.</strong><span>Drive grip supplies {roadForcePhrase}; brakes plus rolling and air resistance remove {(totalResistanceForce / 1000).toFixed(1)} kN, leaving {accelerationG >= 0 ? '+' : ''}{accelerationG.toFixed(2)} g.</span></p></li>
           </ol>
 
           <div className="motion-equation-line">
@@ -346,9 +609,13 @@ export default function MotionLab() {
             <strong>F<sub>road</sub> = τ<sub>wheel</sub> ÷ r<sub>tire</sub> &nbsp;·&nbsp; a = ΣF ÷ m</strong>
             <p>The tire pushes backward; static friction from the road pushes the entire car forward, up to the grip limit.</p>
           </div>
+          <div className="motion-equation-line motion-equation-line--brake">
+            <strong>p = F<sub>pedal</sub> ÷ A &nbsp;·&nbsp; E<sub>motion</sub> → heat</strong>
+            <p>The master cylinder turns pedal force into fluid pressure. Calipers turn that pressure into pad force and brake torque; tire grip carries the slowing force to the car.</p>
+          </div>
         </section>
 
-        <p className="motion-scope-note"><strong>What moved to the simulator:</strong> brakes, hydraulics, steering, and suspension are still fully explorable in the final tab. This window intentionally isolates the drivetrain.</p>
+        <p className="motion-scope-note"><strong>Scope of this bench:</strong> the complete power path and hydraulic service brakes are live here. Steering and suspension remain fully explorable in the final simulator.</p>
         <a className="next-lab" href="#simulator"><span>Final experiment</span><strong>Drive it with every system exposed →</strong></a>
       </aside>
     </div>

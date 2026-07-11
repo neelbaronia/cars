@@ -2,7 +2,8 @@ import { Edges, Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { FINAL_DRIVE_RATIO } from '../physics.js'
+import { TEACHING_GEAR_APPLICATIONS } from '../motionParts.js'
+import { FINAL_DRIVE_RATIO, getGearRatio } from '../physics.js'
 import { FlowDots, ForceArrow, PaintedBox } from './SceneKit.jsx'
 
 const COLORS = {
@@ -14,7 +15,6 @@ const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 const ReducedMotionContext = createContext(false)
 const WHEEL_RADIUS = 0.31
 const VISUAL_ROTATION_SCALE = 0.35
-const STUDY_GEAR_RATIOS = [0, 3.55, 2.19, 1.52, 1.16]
 const METERING_RUNNER_ZS = [-.42, -.14, .14, .42]
 const METERING_AIR_PATH = [[-3, .45, 0], [-2.25, .45, 0], [-1.05, .45, 0], [.2, .42, 0]]
 const METERING_FUEL_RAIL_PATH = [[.82, 1.25, -.62], [.82, 1.25, .62]]
@@ -24,6 +24,34 @@ const METERING_RUNNER_PATHS = METERING_RUNNER_ZS.map((z) => [
 const METERING_INJECTOR_PATHS = METERING_RUNNER_ZS.map((z) => [
   [.82, 1.2, z], [.86, .7, z], [.98, .25, z], [1.35, .07, z], [1.88, -.03, z],
 ])
+const GEAR_PATH_LANES = Object.freeze({ 1: -.72, 2: -.24, 3: .24, 4: .72 })
+const CLUTCH_CIRCUITS = Object.freeze([
+  Object.freeze({ id: 'A', label: 'FORWARD', y: .78 }),
+  Object.freeze({ id: 'B', label: 'LOW', y: .39 }),
+  Object.freeze({ id: 'C', label: 'SECOND', y: 0 }),
+  Object.freeze({ id: 'D', label: 'DIRECT', y: -.39 }),
+  Object.freeze({ id: 'E', label: 'OVERDRIVE', y: -.78 }),
+])
+
+const clamp01 = (value, fallback = 0) => THREE.MathUtils.clamp(
+  Number.isFinite(Number(value)) ? Number(value) : fallback,
+  0,
+  1,
+)
+
+const normalizeShiftStage = (stage) => String(stage || 'engaged')
+  .trim()
+  .toLowerCase()
+  .replace(/[ _]+/g, '-')
+
+const gearPurpose = (gear) => {
+  if (Number(gear) === 0) return 'TORQUE PATH OPEN'
+  if (Number(gear) === 1) return 'LAUNCH TORQUE'
+  if (Number(gear) === 2) return 'ACCELERATION'
+  if (Number(gear) === 3) return 'ROAD SPEED'
+  if (Number(gear) === 4) return 'CRUISE'
+  return 'HIGHWAY CRUISE'
+}
 
 function StudyLabel({ position, color = COLORS.ink, children, detail, tooltipSide = 'below' }) {
   const tooltipId = useId()
@@ -282,7 +310,7 @@ function EngineStudy({ rpm }) {
 
 function CouplingStudy({ rpm, vehicleSpeed, gear }) {
   const engineSpeed = Math.min(6, Math.max(0, rpm) / 850 * 2.2)
-  const ratio = STUDY_GEAR_RATIOS[gear] || 0
+  const ratio = Math.abs(getGearRatio(gear))
   const turbineSpeed = gear === 0 ? 0 : THREE.MathUtils.clamp(drivelineSpeeds(vehicleSpeed).propshaft * ratio, -6, 6)
   return (
     <group>
@@ -307,58 +335,296 @@ function CouplingStudy({ rpm, vehicleSpeed, gear }) {
   )
 }
 
-function PlanetarySet({ inputSpeed, outputSpeed }) {
+function PlanetarySet({ inputSpeed, outputSpeed, selecting = false, torqueTransfer = 1, selectedGear = 0 }) {
   const carrier = useRef()
   const reducedMotion = useContext(ReducedMotionContext)
   useFrame((_, delta) => {
     if (carrier.current && !reducedMotion) carrier.current.rotation.x -= delta * outputSpeed
   })
+  const pathOpacity = .3 + clamp01(torqueTransfer, 1) * .7
   return (
     <group>
+      {[1, 2, 3, 4].map((gearValue, index) => {
+        const active = Number(selectedGear) === gearValue
+        return (
+          <group key={gearValue} position={[(index - 1.5) * .17, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
+            <mesh>
+              <torusGeometry args={[1.27, active ? .055 : .028, 8, 34]} />
+              <meshStandardMaterial color={active ? COLORS.burn : COLORS.metal} transparent
+                opacity={active ? .96 : .2} emissive={COLORS.burn}
+                emissiveIntensity={active ? (selecting ? .7 : .3) : 0} />
+            </mesh>
+          </group>
+        )
+      })}
       <group rotation={[0, Math.PI / 2, 0]}>
-        <mesh><torusGeometry args={[1.05, .14, 12, 34]} /><meshStandardMaterial color={COLORS.power} /></mesh>
+        <mesh>
+          <torusGeometry args={[1.05, .14, 12, 34]} />
+          <meshStandardMaterial color={COLORS.power} transparent opacity={pathOpacity}
+            emissive={COLORS.power} emissiveIntensity={selecting ? .42 : .08} />
+        </mesh>
       </group>
-      <RotatingDisc position={[0, 0, 0]} radius={.32} depth={.22} color={COLORS.fuel} speed={inputSpeed} />
+      <RotatingDisc position={[0, 0, 0]} radius={.32} depth={.22} color={COLORS.fuel}
+        speed={inputSpeed} opacity={pathOpacity} />
       <group ref={carrier}>
         {[[0, .62], [.54, -.31], [-.54, -.31]].map(([y, z], index) => (
-          <RotatingDisc key={index} position={[0, y, z]} radius={.25} depth={.2} color="#d8c8e8" speed={-(inputSpeed - outputSpeed) * 1.2} />
+          <RotatingDisc key={index} position={[0, y, z]} radius={.25} depth={.2} color="#d8c8e8"
+            speed={-(inputSpeed - outputSpeed) * 1.2} opacity={pathOpacity} />
         ))}
-        <mesh rotation={[0, Math.PI / 2, 0]}><torusGeometry args={[.72, .045, 8, 28]} /><meshStandardMaterial color={COLORS.cream} /></mesh>
+        <mesh rotation={[0, Math.PI / 2, 0]}>
+          <torusGeometry args={[.72, .045, 8, 28]} />
+          <meshStandardMaterial color={selecting ? COLORS.burn : COLORS.cream}
+            emissive={COLORS.burn} emissiveIntensity={selecting ? .34 : 0} />
+        </mesh>
       </group>
     </group>
   )
 }
 
-function GearboxStudy({ rpm, gear, vehicleSpeed }) {
-  const ratio = gear === 0 ? 0 : STUDY_GEAR_RATIOS[gear] || 1.16
-  const engineSpeed = Math.min(5.5, Math.max(0, rpm) / 850 * 2)
-  const outputSpeed = THREE.MathUtils.clamp(drivelineSpeeds(vehicleSpeed).propshaft, -5.5, 5.5)
-  const inputSpeed = gear === 0 ? engineSpeed * .45 : THREE.MathUtils.clamp(outputSpeed * ratio, -5.5, 5.5)
+function ClutchCircuitTag({ circuit, selected, pressurized }) {
+  return (
+    <Html position={[0, 0, .43]} center sprite distanceFactor={8.5} zIndexRange={[80, 0]}
+      style={{ pointerEvents: 'none' }}>
+      <span className={`gear-clutch-tag ${selected ? 'is-selected' : ''} ${pressurized ? 'is-pressurized' : ''}`}>
+        <b>{circuit.id}</b>{circuit.label}
+      </span>
+    </Html>
+  )
+}
+
+function MiniClutchPack({ circuit, inputSpeed, selected, clampAmount, pressurized }) {
+  const leftPlate = useRef()
+  const rightPlate = useRef()
+  const reducedMotion = useContext(ReducedMotionContext)
+
+  useFrame((_, delta) => {
+    const blend = reducedMotion ? 1 : 1 - Math.exp(-delta * 13)
+    const gap = .055 + (1 - clamp01(clampAmount)) * .105
+    if (leftPlate.current) leftPlate.current.position.x = THREE.MathUtils.lerp(leftPlate.current.position.x, -gap, blend)
+    if (rightPlate.current) rightPlate.current.position.x = THREE.MathUtils.lerp(rightPlate.current.position.x, gap, blend)
+  })
+
+  const color = selected ? COLORS.burn : '#b9aeb6'
+  const opacity = selected ? .96 : .25
+  return (
+    <group position={[0, circuit.y, 0]}>
+      <Shaft start={[-.42, 0, 0]} end={[.42, 0, 0]} color={selected ? COLORS.power : COLORS.metal}
+        radius={.035} opacity={selected ? .9 : .25} />
+      <group ref={leftPlate} position={[-.16, 0, 0]}>
+        <RotatingDisc position={[0, 0, 0]} radius={.245} depth={.055} color={color} speed={inputSpeed} opacity={opacity} />
+      </group>
+      <group ref={rightPlate} position={[.16, 0, 0]}>
+        <RotatingDisc position={[0, 0, 0]} radius={.245} depth={.055}
+          color={selected ? COLORS.power : '#d8c8d6'} speed={inputSpeed} opacity={opacity} />
+      </group>
+      <mesh rotation={[0, Math.PI / 2, 0]}>
+        <torusGeometry args={[.3, .025, 8, 22]} />
+        <meshStandardMaterial color={pressurized ? '#2f9a96' : COLORS.metal} transparent opacity={selected ? .95 : .2}
+          emissive="#2f9a96" emissiveIntensity={pressurized ? .6 : 0} />
+      </mesh>
+      <ClutchCircuitTag circuit={circuit} selected={selected} pressurized={pressurized} />
+    </group>
+  )
+}
+
+function ClutchApplicationBank({ inputSpeed, selectedCircuitIds, clampAmount, pressurized }) {
+  const selected = useMemo(() => new Set(selectedCircuitIds), [selectedCircuitIds])
+  return (
+    <group>
+      <Shaft start={[-.58, 0, 0]} end={[.58, 0, 0]} color={COLORS.power} radius={.085} />
+      {CLUTCH_CIRCUITS.map((circuit) => <MiniClutchPack key={circuit.id} circuit={circuit}
+        inputSpeed={inputSpeed} selected={selected.has(circuit.id)}
+        clampAmount={selected.has(circuit.id) ? clampAmount : 0}
+        pressurized={selected.has(circuit.id) && pressurized} />)}
+    </group>
+  )
+}
+
+function ValvePortTag({ gear, active }) {
+  return (
+    <Html position={[0, 0, .32]} center sprite distanceFactor={8.5} zIndexRange={[70, 0]}
+      style={{ pointerEvents: 'none' }}>
+      <span className={`gear-valve-port ${active ? 'is-active' : ''}`}>{gear === 0 ? 'N' : `G${gear}`}</span>
+    </Html>
+  )
+}
+
+function HydraulicGearSelector({ selectedGear, application, selecting, applying, engaged }) {
+  const spool = useRef()
+  const reducedMotion = useContext(ReducedMotionContext)
+  const portX = (Number(selectedGear) - 2) * .58
+  const circuitIds = application.circuits.map((circuit) => circuit.id)
+  const pressureMoving = selecting || applying
+
+  useFrame((_, delta) => {
+    if (!spool.current) return
+    const blend = reducedMotion ? 1 : 1 - Math.exp(-delta * 10)
+    spool.current.position.x = THREE.MathUtils.lerp(spool.current.position.x, portX, blend)
+  })
+
+  return (
+    <group>
+      <PaintedBox size={[3.25, .38, .78]} position={[0, -1.47, .92]} color="#79bdc5" opacity={.7} />
+      <Shaft start={[-1.45, -1.47, .92]} end={[1.45, -1.47, .92]} color="#d9f0eb" radius={.085} opacity={.9} />
+      {[0, 1, 2, 3, 4].map((gear) => {
+        const x = (gear - 2) * .58
+        return (
+          <group key={gear} position={[x, -1.47, .92]}>
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[.13, .13, .42, 14]} />
+              <meshStandardMaterial color={gear === selectedGear ? COLORS.burn : '#d3e3df'}
+                emissive={COLORS.burn} emissiveIntensity={gear === selectedGear ? .38 : 0} />
+            </mesh>
+            <ValvePortTag gear={gear} active={gear === selectedGear} />
+          </group>
+        )
+      })}
+      <group ref={spool} position={[portX, -1.47, .92]}>
+        <PaintedBox size={[.42, .64, .34]} color={COLORS.burn} opacity={.95} />
+      </group>
+      {CLUTCH_CIRCUITS.filter((circuit) => circuitIds.includes(circuit.id)).map((circuit, index) => {
+        const points = [
+          [portX, -1.26, .92],
+          [-.2 - index * .18, -1.08, .76],
+          [-1.0, circuit.y, .48],
+          [-1.75, circuit.y, .2],
+        ]
+        return <FlowDots key={circuit.id} points={points} color="#2f9a96" speed={.7 + index * .12}
+          count={5} active={pressureMoving} radius={.038} />
+      })}
+      <StudyLabel position={[0, -1.88, 1.02]} color="#28778c" tooltipSide="above"
+        detail="A control unit commands hydraulic solenoids. The valve-body spool routes pressurized fluid to the clutch pair in the teaching application chart. Exact clutch names and combinations vary by transmission.">
+        VALVE BODY · {engaged ? 'PRESSURE HELD' : pressureMoving ? 'PRESSURE ROUTING' : 'CIRCUITS EXHAUSTED'}
+      </StudyLabel>
+    </group>
+  )
+}
+
+function GearboxStudy({
+  rpm,
+  engagedGear,
+  targetGear,
+  shiftStage = 'engaged',
+  shiftProgress = 1,
+  torqueTransfer = 1,
+  gearboxInputRpm,
+  gearboxOutputRpm,
+  gearboxOutputTorque,
+  wheelTorque,
+  vehicleSpeed,
+}) {
+  const stage = normalizeShiftStage(shiftStage)
+  const progress = clamp01(shiftProgress, stage === 'engaged' ? 1 : 0)
+  const engaged = Number.isFinite(Number(engagedGear)) ? Number(engagedGear) : 0
+  const target = Number.isFinite(Number(targetGear)) ? Number(targetGear) : engaged
+  const selecting = stage.includes('select') || stage.includes('ratio') || stage.includes('match')
+  const applying = stage.includes('apply') || (stage.includes('engage') && stage !== 'engaged')
+  const releasing = stage.includes('release') || stage.includes('open')
+  const cutting = stage.includes('cut') || stage.includes('unload')
+  const displayGear = selecting || applying ? target : engaged
+  const ratio = Math.abs(getGearRatio(displayGear))
+  const safeTransfer = clamp01(torqueTransfer, stage === 'engaged' ? 1 : 0)
+  const application = TEACHING_GEAR_APPLICATIONS[displayGear] || TEACHING_GEAR_APPLICATIONS[0]
+  const selectedCircuitIds = application.circuits.map((circuit) => circuit.id)
+  const applicationLabel = selectedCircuitIds.length ? selectedCircuitIds.join(' + ') : 'NONE'
+  const clutchClamp = displayGear === 0 ? 0
+    : releasing ? 1 - progress
+      : selecting ? 0
+        : applying ? .25 + progress * .65
+          : 1
+  const clutchPressurized = displayGear !== 0 && (selecting || applying || stage === 'engaged')
+  const wheelRpm = Math.abs(Number(vehicleSpeed) || 0) / (2 * Math.PI * WHEEL_RADIUS) * 60
+  const fallbackOutputRpm = wheelRpm * FINAL_DRIVE_RATIO
+  const outputRpm = Number.isFinite(Number(gearboxOutputRpm)) ? Math.abs(Number(gearboxOutputRpm)) : fallbackOutputRpm
+  const inputRpm = Number.isFinite(Number(gearboxInputRpm))
+    ? Math.abs(Number(gearboxInputRpm))
+    : ratio * outputRpm
+  const inputSpeed = THREE.MathUtils.clamp(inputRpm / 720, -5.5, 5.5)
+  const outputSpeed = THREE.MathUtils.clamp(outputRpm / 720, -5.5, 5.5)
+  const stageLabel = stage === 'engaged' ? 'CLUTCH APPLIED'
+    : cutting ? 'TORQUE CUT'
+      : releasing ? 'CLUTCH RELEASING'
+        : selecting ? 'RATIO SELECTING'
+          : applying ? 'CLUTCH APPLYING'
+            : stage.replaceAll('-', ' ').toUpperCase()
+  const shiftLabel = engaged === target || stage === 'engaged'
+    ? `${displayGear === 0 ? 'N' : displayGear}`
+    : `${engaged === 0 ? 'N' : engaged} → ${target === 0 ? 'N' : target}`
+  const reportedGearboxTorque = Number.isFinite(Number(gearboxOutputTorque)) ? Number(gearboxOutputTorque) : 0
+  const reportedWheelTorque = Number.isFinite(Number(wheelTorque)) ? Number(wheelTorque) : 0
+  const torqueFlowing = displayGear !== 0 && safeTransfer > .03
+  const laneY = GEAR_PATH_LANES[displayGear] || 0
+  const torquePath = [
+    [-2.85, 0, 0], [-1.5, 0, 0], [-.82, laneY, 0],
+    [.78, laneY, 0], [1.5, 0, 0], [2.85, 0, 0],
+  ]
+
   return (
     <group>
       <ExplodedPiece from={[0, 0, 0]} to={[0, 1.6, 0]}><PaintedBox size={[4.4, .42, 2.75]} color="#bda8d1" opacity={.2} /></ExplodedPiece>
       <ExplodedPiece from={[0, 0, 0]} to={[0, -1.6, 0]}><PaintedBox size={[4.4, .42, 2.75]} color="#bda8d1" opacity={.2} /></ExplodedPiece>
       <ExplodedPiece from={[0, 0, 0]} to={[-1.75, 0, 0]}>
-        <Shaft start={[-1.1, 0, 0]} end={[.6, 0, 0]} color={COLORS.power} radius={.11} />
-        {[-.65, -.32, .02].map((x) => <RotatingDisc key={x} position={[x, 0, 0]} radius={.72} depth={.1} color="#efa7bb" speed={inputSpeed} />)}
+        <ClutchApplicationBank inputSpeed={inputSpeed} selectedCircuitIds={selectedCircuitIds}
+          clampAmount={clutchClamp} pressurized={clutchPressurized} />
       </ExplodedPiece>
-      <ExplodedPiece from={[0, 0, 0]} to={[.05, 0, 0]}><PlanetarySet inputSpeed={inputSpeed} outputSpeed={outputSpeed} /></ExplodedPiece>
+      <ExplodedPiece from={[0, 0, 0]} to={[.05, 0, 0]}>
+        <PlanetarySet inputSpeed={inputSpeed} outputSpeed={outputSpeed}
+          selecting={selecting} torqueTransfer={safeTransfer} selectedGear={displayGear} />
+      </ExplodedPiece>
       <ExplodedPiece from={[0, 0, 0]} to={[1.85, 0, 0]}>
-        <RotatingDisc position={[-.55, 0, 0]} radius={.78} depth={.13} color={gear === 0 ? COLORS.metal : COLORS.burn} speed={outputSpeed} />
+        <RotatingDisc position={[-.55, 0, 0]} radius={.78} depth={.13}
+          color={displayGear === 0 ? COLORS.metal : COLORS.burn} speed={outputSpeed}
+          opacity={.38 + safeTransfer * .62} />
         <Shaft start={[-.45, 0, 0]} end={[1.15, 0, 0]} color={COLORS.powerDark} radius={.12} />
       </ExplodedPiece>
-      <StudyLabel position={[-2.25, 1.25, 0]} color="#a9443a"
-        detail="Hydraulic pressure clamps alternating friction plates, coupling or holding selected planetary members to establish a gear ratio.">HYDRAULIC CLUTCH PACKS</StudyLabel>
-      <StudyLabel position={[0, 1.35, 0]} color={COLORS.power}
-        detail="Different combinations of driven, held, and output members trade rotational speed for torque through meshing planetary gears.">SUN · PLANETS · RING</StudyLabel>
-      <StudyLabel position={[2.35, 1.05, 0]} color={gear === 0 ? COLORS.metal : COLORS.burn}
-        detail={gear === 0
-          ? 'Released clutch packs interrupt the engine-to-output torque path, although downstream parts may keep rotating while the car coasts.'
-          : 'The applied clutch combination constrains planetary members, producing the displayed input-to-output speed and torque ratio.'}>
-        {gear === 0 ? 'NEUTRAL · OUTPUT OPEN' : `SELECTED RATIO · ${ratio.toFixed(2)}:1`}
+      {[1, 2, 3, 4].map((gearValue) => {
+        const y = GEAR_PATH_LANES[gearValue]
+        const path = [[-1.5, 0, 0], [-.82, y, 0], [.78, y, 0], [1.5, 0, 0]]
+        const active = gearValue === displayGear
+        return (
+          <group key={gearValue}>
+            {path.slice(1).map((point, index) => <Shaft key={index} start={path[index]} end={point}
+              color={active ? COLORS.burn : COLORS.metal} radius={active ? .03 : .014}
+              opacity={active ? .18 + safeTransfer * .55 : .12} />)}
+            <Html position={[0, y, .38]} center sprite distanceFactor={8.5} zIndexRange={[65, 0]}
+              style={{ pointerEvents: 'none' }}>
+              <span className={`gear-ratio-lane ${active ? 'is-active' : ''}`}>G{gearValue}</span>
+            </Html>
+          </group>
+        )
+      })}
+      <FlowDots points={torquePath} color={COLORS.burn} speed={.35 + safeTransfer * .9}
+        count={12} active={torqueFlowing} radius={.045} />
+      <HydraulicGearSelector selectedGear={displayGear} application={application}
+        selecting={selecting} applying={applying} engaged={stage === 'engaged' && displayGear !== 0} />
+      <StudyLabel position={[-2.3, 1.28, 0]} color="#a9443a"
+        detail="Each ratio uses a particular pair of friction elements. The old pair opens before the valve body pressurizes and clamps the new pair. This application chart is functional; exact names vary among real transmissions.">
+        {stageLabel} · {applicationLabel} · {Math.round(safeTransfer * 100)}% TORQUE
       </StudyLabel>
-      <StudyLabel position={[2.5, -.8, 0]} color={COLORS.powerDark}
-        detail="Carries the transmission’s selected speed and torque onward to the driveshaft.">OUTPUT SHAFT</StudyLabel>
+      <StudyLabel position={[-2.35, -1.12, 0]} color={COLORS.powerDark} tooltipSide="above"
+        detail="Engine speed can differ from transmission input speed because the torque converter slips, especially during launch and a shift.">
+        ENGINE {Math.round(Number(rpm) || 0)} · INPUT {Math.round(inputRpm)} RPM
+      </StudyLabel>
+      <StudyLabel position={[0, 1.35, 0]} color={COLORS.power}
+        detail="The four thin selector rings are a teaching map of the available ratio circuits, not four literal gears. The glowing ring is the selected circuit. Real automatics combine several planetary members according to a clutch application chart.">
+        PLANETARY SET · {displayGear === 0 ? 'NO RATIO SELECTED' : `GEAR ${displayGear} CIRCUIT`}
+      </StudyLabel>
+      <StudyLabel position={[2.35, 1.12, 0]} color={displayGear === 0 ? COLORS.metal : COLORS.burn}
+        detail={displayGear === 0
+          ? 'Neutral releases the drive clutches. The road can keep the output shaft turning, but engine torque does not cross the gearbox.'
+          : 'A larger numerical ratio multiplies torque more and turns the output fewer times per input revolution. A smaller ratio trades multiplication for output speed.'}>
+        {displayGear === 0
+          ? `N · OUTPUT OPEN · ${stageLabel}`
+          : `GEAR ${shiftLabel} · ${ratio.toFixed(2)}:1 · ${gearPurpose(displayGear)}`}
+      </StudyLabel>
+      <StudyLabel position={[2.45, -1.02, 0]} color={COLORS.powerDark} tooltipSide="above"
+        detail="The output shaft feeds the driveshaft. Its RPM is set by road speed and the fixed final drive; wheel torque also includes the final-drive reduction.">
+        OUTPUT {Math.round(outputRpm)} RPM · WHEEL {Math.round(reportedWheelTorque)} N·m
+      </StudyLabel>
+      <StudyLabel position={[0, -1.18, 0]} color={COLORS.burn} tooltipSide="above"
+        detail="This reported torque is on the gearbox-output side before the fixed final drive. It falls to zero while the clutch path is open.">
+        GEARBOX OUTPUT {Math.round(reportedGearboxTorque)} N·m
+      </StudyLabel>
     </group>
   )
 }
@@ -507,15 +773,168 @@ function TiresStudy({ speed, roadForce }) {
   )
 }
 
-export function ExplodedMechanismModel({ partId, rpm, throttle, gear, speed, roadForce }) {
+function BrakeStudy({ brake = 0, brakePressureBar, speed = 0 }) {
+  const reducedMotion = useContext(ReducedMotionContext)
+  const pedal = useRef()
+  const masterPiston = useRef()
+  const leftPad = useRef()
+  const rightPad = useRef()
+  const pressure = Number.isFinite(Number(brakePressureBar))
+    ? THREE.MathUtils.clamp(Number(brakePressureBar), 0, 140)
+    : clamp01(brake) * 90
+  const application = Math.max(clamp01(brake), clamp01(pressure / 90))
+  const wheelSpeed = drivelineSpeeds(speed).wheel
+
+  useFrame((_, delta) => {
+    const blend = reducedMotion ? 1 : 1 - Math.exp(-delta * 12)
+    if (pedal.current) {
+      pedal.current.rotation.z = THREE.MathUtils.lerp(pedal.current.rotation.z, -.12 - application * .42, blend)
+    }
+    if (masterPiston.current) {
+      masterPiston.current.position.x = THREE.MathUtils.lerp(masterPiston.current.position.x, -.84 + application * .3, blend)
+    }
+    if (leftPad.current) {
+      leftPad.current.position.x = THREE.MathUtils.lerp(leftPad.current.position.x, 2.12 + application * .11, blend)
+    }
+    if (rightPad.current) {
+      rightPad.current.position.x = THREE.MathUtils.lerp(rightPad.current.position.x, 2.58 - application * .11, blend)
+    }
+  })
+
+  const fluidPath = [[-.55, .28, .15], [.15, .28, .15], [.78, .42, .42], [1.55, .45, .72], [1.95, .28, .72]]
+  const clampLength = application * .62
+  return (
+    <group>
+      <ExplodedPiece from={[-1.4, 0, 0]} to={[-2.75, .1, 0]}>
+        <group ref={pedal} rotation={[0, 0, -.12]}>
+          <Shaft start={[0, .32, 0]} end={[.16, -.72, 0]} color={COLORS.ink} radius={.075} />
+          <PaintedBox size={[.42, .16, .5]} position={[.19, -.78, 0]} color={COLORS.road} />
+          <mesh position={[0, .32, 0]}><sphereGeometry args={[.11, 14, 10]} /><meshStandardMaterial color={COLORS.powerDark} /></mesh>
+        </group>
+      </ExplodedPiece>
+
+      <ExplodedPiece from={[-1.5, .2, 0]} to={[-1.95, .25, 0]}>
+        <RotatingDisc position={[0, 0, 0]} radius={.82} depth={.25} color={COLORS.ink} speed={0} spokes={false} />
+        <RotatingDisc position={[.18, 0, 0]} radius={.62} depth={.18} color="#77bdd2" speed={0} spokes={false}
+          opacity={.42 + application * .46} />
+        <Shaft start={[-.65, 0, 0]} end={[.65, 0, 0]} color={COLORS.powerDark} radius={.08} />
+      </ExplodedPiece>
+
+      <ExplodedPiece from={[-.8, .25, 0]} to={[-.7, .25, 0]}>
+        <Shaft start={[-.65, 0, 0]} end={[.72, 0, 0]} color="#9fcbd5" radius={.24} opacity={.58} />
+        <group ref={masterPiston} position={[-.84, 0, 0]}>
+          <mesh rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[.18, .18, .22, 18]} />
+            <meshStandardMaterial color={COLORS.burn} emissive={COLORS.burn} emissiveIntensity={application * .3} />
+          </mesh>
+        </group>
+        <PaintedBox size={[.55, .46, .62]} position={[.18, .55, 0]} color="#77bdd2" opacity={.56} />
+      </ExplodedPiece>
+
+      <Shaft start={[-.55, .28, .15]} end={[-.05, .28, .15]} color="#28778c" radius={.055} />
+      <Shaft start={[-.05, .28, .15]} end={[.78, .42, .42]} color="#28778c" radius={.055} />
+      <Shaft start={[.78, .42, .42]} end={[1.55, .45, .72]} color="#28778c" radius={.055} />
+      <Shaft start={[1.55, .45, .72]} end={[1.95, .28, .72]} color="#28778c" radius={.055} />
+      <FlowDots points={fluidPath} color="#77bdd2" speed={.3 + application * 1.1}
+        count={11} active={application > .015} radius={.05} />
+
+      <ExplodedPiece from={[1.25, 0, 0]} to={[2.35, 0, 0]}>
+        <RotatingDisc position={[0, 0, 0]} radius={1.05} depth={.13} color={application > .55 ? '#d98762' : COLORS.metal}
+          speed={wheelSpeed} spokes={false} />
+        <mesh rotation={[0, Math.PI / 2, 0]}>
+          <torusGeometry args={[.58, .11, 12, 30]} />
+          <meshStandardMaterial color={COLORS.burn} transparent opacity={application * .5}
+            emissive={COLORS.burn} emissiveIntensity={application * .48} />
+        </mesh>
+      </ExplodedPiece>
+
+      <group>
+        <PaintedBox size={[.68, .28, .38]} position={[2.35, .75, .55]} color="#28778c" />
+        <PaintedBox size={[.68, .28, .38]} position={[2.35, -.75, .55]} color="#28778c" />
+        <PaintedBox size={[.68, 1.28, .28]} position={[2.35, 0, .76]} color="#28778c" opacity={.68} />
+        <group ref={leftPad} position={[2.12, 0, .48]}>
+          <PaintedBox size={[.12, 1.15, .42]} color={COLORS.road} emissive={COLORS.burn} emissiveIntensity={application * .38} />
+        </group>
+        <group ref={rightPad} position={[2.58, 0, .48]}>
+          <PaintedBox size={[.12, 1.15, .42]} color={COLORS.road} emissive={COLORS.burn} emissiveIntensity={application * .38} />
+        </group>
+      </group>
+
+      {clampLength > .03 && (
+        <>
+          <ForceArrow from={[1.55, 0, .48]} direction={[1, 0, 0]} length={clampLength}
+            color="#28778c" label="PAD CLAMP" />
+          <ForceArrow from={[3.15, 0, .48]} direction={[-1, 0, 0]} length={clampLength} color="#28778c" />
+        </>
+      )}
+
+      <StudyLabel position={[-2.55, 1.28, 0]} color={COLORS.ink}
+        detail="The pedal provides leverage. The vacuum booster adds force, but braking still remains available with a harder pedal if boost is lost.">
+        PEDAL + BOOSTER · {Math.round(application * 100)}%
+      </StudyLabel>
+      <StudyLabel position={[-.75, 1.2, 0]} color="#28778c"
+        detail="The master-cylinder piston displaces nearly incompressible brake fluid. Its two real circuits provide redundancy; this schematic draws one path for clarity.">
+        MASTER CYLINDER · {pressure.toFixed(0)} BAR
+      </StudyLabel>
+      <StudyLabel position={[.55, -.72, .35]} color="#28778c" tooltipSide="above"
+        detail="Pressure is transmitted through sealed fluid, but fluid does not continuously flow to the caliper once pressure is established. Moving dots indicate pressure propagation, not circulation.">
+        SEALED HYDRAULIC LINE
+      </StudyLabel>
+      <StudyLabel position={[2.0, 1.55, .65]} color="#28778c"
+        detail="Hydraulic pistons squeeze pads against both faces of the rotor. Clamp force and pad friction create braking torque at the hub.">
+        CALIPER + PADS
+      </StudyLabel>
+      <StudyLabel position={[2.8, -1.35, 0]} color={COLORS.burn} tooltipSide="above"
+        detail="The rotating disc absorbs vehicle kinetic energy as heat. This is one wheel-end schematic; a service-brake master cylinder feeds multiple calipers.">
+        ROTOR · FRICTION TO HEAT
+      </StudyLabel>
+    </group>
+  )
+}
+
+export function ExplodedMechanismModel({
+  partId,
+  rpm,
+  throttle,
+  gear,
+  engagedGear = gear,
+  requestedGear,
+  targetGear,
+  shiftStage = 'engaged',
+  shiftProgress = 1,
+  torqueTransfer = 1,
+  inputRpm,
+  gearboxInputRpm,
+  outputRpm,
+  gearboxOutputRpm,
+  gearboxTorque,
+  gearboxOutputTorque,
+  wheelTorque,
+  speed,
+  roadForce,
+  brake = 0,
+  brakePressureBar,
+}) {
   const reducedMotion = usePrefersReducedMotion()
+  const resolvedTargetGear = targetGear ?? requestedGear ?? engagedGear
+  const resolvedInputRpm = gearboxInputRpm ?? inputRpm
+  const resolvedOutputRpm = gearboxOutputRpm ?? outputRpm
+  const resolvedGearboxTorque = gearboxOutputTorque ?? gearboxTorque
+  const resolvedWheelTorque = wheelTorque ?? (
+    Number.isFinite(Number(resolvedGearboxTorque)) ? Number(resolvedGearboxTorque) * FINAL_DRIVE_RATIO : undefined
+  )
   let study
   if (partId === 'metering') study = <MeteringStudy throttle={throttle} rpm={rpm} />
   else if (partId === 'engine') study = <EngineStudy rpm={rpm} />
   else if (partId === 'coupling') study = <CouplingStudy rpm={rpm} vehicleSpeed={speed} gear={gear} />
-  else if (partId === 'gearbox') study = <GearboxStudy rpm={rpm} gear={gear} vehicleSpeed={speed} />
+  else if (partId === 'gearbox') study = <GearboxStudy rpm={rpm} engagedGear={engagedGear} targetGear={resolvedTargetGear}
+    shiftStage={shiftStage} shiftProgress={shiftProgress} torqueTransfer={torqueTransfer}
+    gearboxInputRpm={resolvedInputRpm} gearboxOutputRpm={resolvedOutputRpm}
+    gearboxOutputTorque={resolvedGearboxTorque} wheelTorque={resolvedWheelTorque} vehicleSpeed={speed} />
   else if (partId === 'shaft') study = <DriveshaftStudy speed={speed} />
   else if (partId === 'differential') study = <DifferentialStudy speed={speed} />
+  else if (partId === 'brakes' || partId === 8 || partId === '8') study = <BrakeStudy brake={brake}
+    brakePressureBar={brakePressureBar} speed={speed} />
   else study = <TiresStudy speed={speed} roadForce={roadForce} />
 
   return <ReducedMotionContext.Provider value={reducedMotion}>{study}</ReducedMotionContext.Provider>

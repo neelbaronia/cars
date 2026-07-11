@@ -7,7 +7,7 @@ function DiagramLabel({ x, y, width, children, tone = 'ink' }) {
   )
 }
 
-export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBar, pistonForce }) {
+export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBar, pistonForce, mixture, fuelPerCycleMg = 0 }) {
   const stroke = Math.floor(progress) % 4
   const within = progress - Math.floor(progress)
   const radians = progress * Math.PI
@@ -21,10 +21,27 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
   const pistonPinY = crankPin.y - Math.sqrt(rodLength ** 2 - (crankPin.x - crankCenter.x) ** 2)
   const pistonTop = pistonPinY - 24
   const load = throttle > 0 ? throttle : rpm <= 950 ? 8 : 0
-  const firing = spark && load > 0
+  const mixtureState = mixture || {
+    equivalenceRatio: 1,
+    airFuelRatio: 14.7,
+    combustionQuality: 1,
+    torqueMultiplier: 1,
+    fuelConsumptionMultiplier: 1,
+    exhaustHeatTendency: 1,
+    status: 'stoichiometric',
+  }
+  const richness = mixtureState.equivalenceRatio
+  const fuelDose = load * richness
+  const mixtureUnstable = mixtureState.status === 'too-lean' || mixtureState.status === 'too-rich'
+  const firing = spark && load > 0 && mixtureState.combustionQuality > 0.08
   const intakeOpen = stroke === 0
   const exhaustOpen = stroke === 3
-  const chargeColor = stroke === 0 ? '#77bdd2' : stroke === 1 ? '#a98ac1' : stroke === 2 && firing ? '#e6543f' : '#d6a157'
+  const compressedChargeColor = richness < 0.95 ? '#82b9c9' : richness > 1.05 ? '#c68f86' : '#a98ac1'
+  const burnColor = mixtureState.status === 'too-lean' ? '#c78d68'
+    : mixtureState.status === 'lean' ? '#df9c58'
+      : mixtureState.status === 'too-rich' ? '#98483d'
+        : mixtureState.status === 'rich' ? '#d65c3f' : '#e6543f'
+  const chargeColor = stroke === 0 ? '#77bdd2' : stroke === 1 ? compressedChargeColor : stroke === 2 && firing ? burnColor : '#d6a157'
   const forceDirection = pistonForce >= 0 ? 1 : -1
   const forceLength = Math.min(112, Math.max(22, Math.abs(pistonForce) / 95))
   const fuelFlowing = stroke === 0 && load > 0 && mode !== 'energy'
@@ -32,23 +49,46 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
   const exhaustFlowing = stroke === 3 && mode !== 'energy'
   const chamberHeight = Math.max(18, pistonTop - 202)
   const mixtureVisible = load > 0 && (stroke === 0 || stroke === 1 || (stroke === 2 && within < 0.16))
-  const mixtureDotCount = 6 + Math.round(load / 7)
-  const mixtureDots = Array.from({ length: mixtureDotCount }, (_, index) => ({
+  const airDotCount = 6 + Math.round(load / 11)
+  const fuelDotCount = Math.max(1, Math.round((3 + load / 24) * richness))
+  const airDots = Array.from({ length: airDotCount }, (_, index) => ({
     x: 354 + (index * 37) % 116,
     y: 211 + (((index * 47) % 100) / 100) * Math.max(8, chamberHeight - 18),
-    fuel: index % 3 === 0,
+    fuel: false,
   }))
+  const fuelDots = Array.from({ length: fuelDotCount }, (_, index) => ({
+    x: 358 + (index * 43 + 19) % 108,
+    y: 214 + (((index * 61 + 23) % 100) / 100) * Math.max(8, chamberHeight - 22),
+    fuel: true,
+  }))
+  const mixtureDots = [...airDots, ...fuelDots]
   const burnProgress = stroke === 2 && firing ? Math.min(1, within / 0.62) : 0
+  const unstablePulse = mixtureUnstable ? 0.68 + Math.sin(within * Math.PI * 14) * 0.22 : 1
+  const flameStrength = mixtureState.combustionQuality * unstablePulse
+  const flameRadius = 14 + burnProgress * (36 + flameStrength * (52 + load * 0.35))
+  const flameOffset = mixtureUnstable ? Math.sin(within * Math.PI * 18) * 6 : 0
   const shaftDegrees = progress * 180
   const wheelDegrees = progress * 78
-  const fuelDropletCount = fuelFlowing ? Math.max(1, Math.ceil(load / 20)) : 0
-  const sprayParticleCount = fuelFlowing ? Math.max(1, Math.ceil(load / 25)) : 0
-  const fuelTravelSeconds = Math.max(1.15, 3.5 - load * 0.022)
+  const fuelDropletCount = fuelFlowing ? Math.max(1, Math.ceil(fuelDose / 18)) : 0
+  const sprayParticleCount = fuelFlowing ? Math.max(1, Math.ceil(fuelDose / 22)) : 0
+  const fuelTravelSeconds = Math.max(1.05, 3.5 - fuelDose * 0.02)
   const throttlePlateDegrees = 90 - throttle * 0.9
+  const flameCoreColor = mixtureState.status === 'too-lean' ? '#f8d19b'
+    : mixtureState.status === 'too-rich' ? '#f0a06e' : '#fff4a3'
+  const flameEdgeColor = mixtureState.status === 'lean' || mixtureState.status === 'too-lean' ? '#e59a4e' : '#e6543f'
+  const exhaustColor = mixtureState.status === 'too-lean' ? '#769eaa'
+    : mixtureState.status === 'lean' ? '#929a79'
+      : mixtureState.status === 'too-rich' ? '#785248'
+        : mixtureState.status === 'rich' ? '#a96b45' : '#b97d45'
+  const mixtureBurnLabel = mixtureState.status === 'too-lean' ? 'TOO LEAN · UNSTABLE'
+    : mixtureState.status === 'lean' ? 'LEAN · SMALLER BURN'
+      : mixtureState.status === 'too-rich' ? 'TOO RICH · INCOMPLETE'
+        : mixtureState.status === 'rich' && richness <= 1.16 ? 'RICH · BEST POWER'
+          : mixtureState.status === 'rich' ? 'RICH · OUTPUT FALLING' : 'STOICH · BALANCED BURN'
 
   return (
-    <div className={`engine-diagram engine-diagram--${mode}`}>
-      <svg viewBox="0 0 900 650" role="img" aria-label="Animated schematic showing the fuel path, four-stroke cylinder, crankshaft, drivetrain, driven wheel, and forward road force">
+    <div className={`engine-diagram engine-diagram--${mode} engine-diagram--mixture-${mixtureState.status}`}>
+      <svg viewBox="0 0 900 650" role="img" aria-label={`Animated gasoline-engine schematic at ${Math.round(richness * 100)} percent fuel richness and ${mixtureState.airFuelRatio.toFixed(1)} to 1 air-fuel ratio, showing the fuel path, combustion, crankshaft, drivetrain, and driven wheel`}>
         <defs>
           <marker id="diagram-arrow-coral" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="#e6543f" />
@@ -69,10 +109,10 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
             <path d="M42 0H0V42" fill="none" stroke="#3f9a9d" strokeOpacity=".12" strokeWidth="1" />
           </pattern>
           <radialGradient id="combustion-glow" cx="42%" cy="18%" r="78%">
-            <stop offset="0" stopColor="#fff4a3" stopOpacity=".98" />
+            <stop offset="0" stopColor={flameCoreColor} stopOpacity=".98" />
             <stop offset=".34" stopColor="#f2c348" stopOpacity=".92" />
-            <stop offset=".72" stopColor="#e6543f" stopOpacity=".78" />
-            <stop offset="1" stopColor="#b94335" stopOpacity=".16" />
+            <stop offset=".72" stopColor={flameEdgeColor} stopOpacity=".78" />
+            <stop offset="1" stopColor={burnColor} stopOpacity=".16" />
           </radialGradient>
           <clipPath id="diagram-chamber-clip">
             <rect x="342" y="202" width="140" height={chamberHeight} rx="12" />
@@ -93,8 +133,9 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
           <path className={`diagram-pipe diagram-pipe--air ${airFlowing ? 'is-flowing' : ''}`} d="M72 188 H230 Q275 188 318 214 L350 228"
             style={{ '--diagram-flow-duration': `${Math.max(.42, 1.05 - load * .006)}s`, strokeWidth: 8 + load * .055 }} />
           <path className={`diagram-pipe diagram-pipe--fuel ${fuelFlowing ? 'is-flowing' : ''}`} d="M724 468 Q640 435 604 365 Q558 272 454 176"
-            style={{ '--diagram-flow-duration': `${Math.max(.45, 1.1 - load * .006)}s`, strokeWidth: 8 + load * .05 }} />
-          <path className={`diagram-pipe diagram-pipe--exhaust ${exhaustFlowing ? 'is-flowing' : ''}`} d="M491 226 Q555 226 585 263 H798" />
+            style={{ '--diagram-flow-duration': `${Math.max(.45, 1.1 - fuelDose * .0055)}s`, strokeWidth: 8 + fuelDose * .05 }} />
+          <path className={`diagram-pipe diagram-pipe--exhaust ${exhaustFlowing ? 'is-flowing' : ''}`} d="M491 226 Q555 226 585 263 H798"
+            style={{ stroke: exhaustColor, opacity: 0.48 + mixtureState.exhaustHeatTendency * 0.52 }} />
           <g className="diagram-throttle-body" transform="translate(248 188)">
             <circle r="16" />
             <line x1="-14" y1="0" x2="14" y2="0" transform={`rotate(${throttlePlateDegrees})`} />
@@ -122,7 +163,7 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
                   <animateMotion dur={`${Math.max(.35, .9 - load * .005)}s`} begin={`${index * -0.18}s`} repeatCount="indefinite" path="M454 192 Q424 202 389 224" />
                 </circle>
               ))}
-              <text x="500" y="205">FUEL DOSE · {throttle}% REQUEST</text>
+              <text x="500" y="205">FUEL · {Math.round(richness * 100)}% RECIPE · {fuelPerCycleMg.toFixed(1)} MG/CYCLE</text>
             </g>
           )}
         </g>
@@ -140,12 +181,14 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
           )}
           {burnProgress > 0 && (
             <g className="diagram-combustion" clipPath="url(#diagram-chamber-clip)">
-              <circle cx="417" cy="204" r={12 + burnProgress * (85 + load * .6)} fill="url(#combustion-glow)"
-                className="diagram-combustion-front" opacity={.58 + load * .004} />
-              {within < .28 && <path className="diagram-flame-core" d="M417 198c-24 28-17 50 0 62 18-12 25-35 7-54 1 14-7 18-12 25 2-14-2-22 5-33z" />}
+              <circle cx={417 + flameOffset} cy="204" r={flameRadius} fill="url(#combustion-glow)"
+                className="diagram-combustion-front" opacity={0.18 + flameStrength * 0.72}
+                style={{ stroke: flameEdgeColor, strokeDasharray: mixtureUnstable ? '9 6' : 'none' }} />
+              {within < .28 && flameStrength > 0.45 && <path className="diagram-flame-core" d="M417 198c-24 28-17 50 0 62 18-12 25-35 7-54 1 14-7 18-12 25 2-14-2-22 5-33z"
+                style={{ fill: flameCoreColor, opacity: Math.min(1, flameStrength + 0.12) }} />}
             </g>
           )}
-          {burnProgress > 0 && <text className="diagram-combustion-label" x="512" y="236">{throttle}% REQUEST → CONTROLLED BURN → HOT GAS</text>}
+          {burnProgress > 0 && <text className="diagram-combustion-label" x="512" y="268">{mixtureBurnLabel}</text>}
           <text className="diagram-pressure" x="412" y="236" textAnchor="middle">{pressureBar.toFixed(1)} BAR</text>
 
           <g className={`diagram-valve ${intakeOpen ? 'is-open' : ''}`} transform={`translate(378 ${intakeOpen ? 8 : 0})`}>
@@ -213,7 +256,7 @@ export function EngineDiagram({ progress, throttle, rpm, spark, mode, pressureBa
           <text className="diagram-force-label" x="535" y={pistonPinY + forceDirection * forceLength / 2}>NET GAS FORCE</text>
           <path d="M356 522 A78 78 0 0 0 471 530" className="diagram-torque" markerEnd="url(#diagram-arrow-violet)" />
           <text className="diagram-torque-label" x="410" y="627" textAnchor="middle">TORQUE</text>
-          {stroke === 2 && firing && <g className="diagram-heat"><path d="M521 248q18-18 0-36" /><path d="M550 270q18-18 0-36" /><path d="M579 253q18-18 0-36" /></g>}
+          {stroke === 2 && firing && <g className="diagram-heat" style={{ opacity: 0.18 + mixtureState.exhaustHeatTendency * 0.82 }}><path d="M521 248q18-18 0-36" /><path d="M550 270q18-18 0-36" /><path d="M579 253q18-18 0-36" /></g>}
         </g>
 
         <g className="diagram-cycle-key" transform="translate(78 590)">

@@ -50,6 +50,10 @@ export default function App() {
           <span><strong>HOW A CAR WORKS</strong><small>A hands-on mechanics studio</small></span>
         </a>
         <div className="header-note"><Sparkles size={16} /> Fuel · force · motion</div>
+        <a className="site-credit" href="https://www.nbaronia.com" target="_blank" rel="noreferrer">
+          <span>Made by</span>
+          <strong>nbaronia</strong>
+        </a>
       </header>
 
       <nav className="lab-tabs" aria-label="Car mechanics experiments">

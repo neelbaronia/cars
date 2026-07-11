@@ -25,7 +25,7 @@ export const MOTION_PARTS = [
     summary: 'Gears trade rotational speed for torque.',
     detail: 'A low gear turns the output fewer times per engine revolution, multiplying output torque. A high gear gives less multiplication and more wheel speed. Neutral interrupts the torque path.',
     studyFlow: ['Input rotation', 'Clutch packs + planetary set', 'Selected output ratio'],
-    internals: ['Hydraulic clutch packs', 'Sun gear', 'Planet gears and carrier', 'Ring gear', 'Output shaft and bearings'],
+    internals: ['Valve body, shift solenoids, and hydraulic passages', 'Hydraulic clutch and brake packs', 'Sun gear', 'Planet gears and carrier', 'Ring gear', 'Output shaft and bearings'],
   },
   {
     id: 'shaft', number: '05', short: 'DRIVESHAFT', name: 'Driveshaft', color: '#76569b',
@@ -48,4 +48,51 @@ export const MOTION_PARTS = [
     studyFlow: ['Axle torque', 'Wheel + tire deform', 'Road pushes car'],
     internals: ['Splined axle and hub', 'Wheel bearings', 'Rim', 'Tire carcass and reinforcing belts', 'Tread blocks and contact patch'],
   },
+  {
+    id: 'brakes', number: '08', short: 'BRAKES', name: 'Pedal + hydraulic disc brakes', color: '#2f8ea1',
+    summary: 'Pedal force becomes hydraulic pressure, then clamping friction at four rotors.',
+    detail: 'The pedal pushes a master-cylinder piston, raising pressure in nearly incompressible brake fluid. Separate lines carry that pressure to caliper pistons at each wheel. Pads squeeze both faces of each rotating disc, converting the car’s kinetic energy into heat; tire grip supplies the road force that actually slows the car.',
+    studyFlow: ['Pedal drives master cylinder', 'Fluid pressure reaches calipers', 'Pads clamp rotors → heat'],
+    internals: ['Brake pedal and pushrod', 'Fluid reservoir and tandem master cylinder', 'Split hydraulic circuits and rigid/flexible lines', 'Caliper pistons and friction pads', 'Ventilated brake rotors at all four wheels'],
+  },
 ]
+
+// A functional teaching chart for the four-speed automatic shown in the
+// exploded gearbox study. Real transmissions use different names and exact
+// clutch combinations, but the selection principle is the same: a valve body
+// pressurizes a particular pair of friction elements to establish each ratio.
+export const TEACHING_GEAR_APPLICATIONS = Object.freeze({
+  0: Object.freeze({ gear: 0, circuits: Object.freeze([]), result: 'Torque path open' }),
+  1: Object.freeze({
+    gear: 1,
+    circuits: Object.freeze([
+      Object.freeze({ id: 'A', label: 'Forward clutch' }),
+      Object.freeze({ id: 'B', label: 'Low brake' }),
+    ]),
+    result: 'Largest reduction for launch',
+  }),
+  2: Object.freeze({
+    gear: 2,
+    circuits: Object.freeze([
+      Object.freeze({ id: 'A', label: 'Forward clutch' }),
+      Object.freeze({ id: 'C', label: 'Second-gear brake' }),
+    ]),
+    result: 'Middle reduction for acceleration',
+  }),
+  3: Object.freeze({
+    gear: 3,
+    circuits: Object.freeze([
+      Object.freeze({ id: 'A', label: 'Forward clutch' }),
+      Object.freeze({ id: 'D', label: 'Direct clutch' }),
+    ]),
+    result: 'Smaller reduction for road speed',
+  }),
+  4: Object.freeze({
+    gear: 4,
+    circuits: Object.freeze([
+      Object.freeze({ id: 'D', label: 'Direct clutch' }),
+      Object.freeze({ id: 'E', label: 'Overdrive brake' }),
+    ]),
+    result: 'Near-direct ratio for cruise',
+  }),
+})
