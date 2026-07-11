@@ -32,10 +32,11 @@ function Hotspot({ part, position, active, onHover, onSelect }) {
   return (
     <Html position={position} center sprite distanceFactor={8.5} style={{ pointerEvents: 'auto' }}>
       <button type="button" className={`drivetrain-hotspot ${active ? 'is-active' : ''}`}
-        style={{ '--part-color': part.color }} aria-label={`Inspect ${part.name}`}
+        style={{ '--part-color': part.color }} data-part-id={part.id}
+        aria-label={`Open exploded study of ${part.name}`} aria-controls="motion-part-study"
         onMouseEnter={() => onHover(part.id)} onMouseLeave={() => onHover(null)}
         onFocus={() => onHover(part.id)} onBlur={() => onHover(null)}
-        onClick={(event) => { event.stopPropagation(); onSelect(part.id) }}>
+        onClick={(event) => { event.stopPropagation(); onSelect(part.id, event.currentTarget) }}>
         <span>{part.number}</span><b>{part.short}</b>
       </button>
     </Html>
@@ -49,7 +50,11 @@ function PartGroup({ id, activePart, hotspot, onHover, onSelect, children }) {
   const handlers = {
     onPointerOver: (event) => { event.stopPropagation(); onHover(id) },
     onPointerOut: (event) => { event.stopPropagation(); onHover(null) },
-    onClick: (event) => { event.stopPropagation(); onSelect(id) },
+    onClick: (event) => {
+      event.stopPropagation()
+      if ((event.delta ?? 0) > 4) return
+      onSelect(id, null)
+    },
   }
   return (
     <group {...handlers}>
