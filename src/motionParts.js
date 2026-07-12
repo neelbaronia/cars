@@ -61,38 +61,56 @@ export const MOTION_PARTS = [
 // exploded gearbox study. Real transmissions use different names and exact
 // clutch combinations, but the selection principle is the same: a valve body
 // pressurizes a particular pair of friction elements to establish each ratio.
+export const TEACHING_CLUTCH_ELEMENTS = Object.freeze({
+  A: Object.freeze({
+    id: 'A', label: 'Forward clutch', short: 'FORWARD', role: 'Drive element',
+    detail: 'Connects the input shaft to the forward planetary path. It stays applied in G1–G3; the second active element changes the reaction constraint and therefore the ratio.',
+  }),
+  B: Object.freeze({
+    id: 'B', label: 'Low brake', short: 'LOW BRAKE', role: 'Holding element',
+    detail: 'Anchors the low-gear reaction path to the transmission case. With A applied, it creates the deepest 3.55:1 reduction and the most launch torque.',
+  }),
+  C: Object.freeze({
+    id: 'C', label: 'Second-gear brake', short: 'SECOND BRAKE', role: 'Holding element',
+    detail: 'Anchors the second-gear reaction path instead of B. With A applied, it creates the 2.19:1 ratio: less torque multiplication, but more output speed.',
+  }),
+  D: Object.freeze({
+    id: 'D', label: 'Direct clutch', short: 'DIRECT', role: 'Drive/coupling element',
+    detail: 'Couples another rotating planetary path instead of holding it stationary. With A it creates G3; with E it supplies the input side of G4.',
+  }),
+  E: Object.freeze({
+    id: 'E', label: 'Fourth-gear brake', short: 'FOURTH BRAKE', role: 'Holding element',
+    detail: 'Anchors the fourth-gear reaction path. With D applied, it creates the near-direct 1.16:1 cruise ratio. Because 1.16 is still above 1.00, this teaching gearbox does not include an overdrive ratio.',
+  }),
+})
+
 export const TEACHING_GEAR_APPLICATIONS = Object.freeze({
-  0: Object.freeze({ gear: 0, circuits: Object.freeze([]), result: 'Torque path open' }),
+  0: Object.freeze({
+    gear: 0, circuits: Object.freeze([]), result: 'Torque path open',
+    detail: 'No friction-element pair is clamped, so the engine-side input can turn without driving the output shaft.',
+  }),
   1: Object.freeze({
     gear: 1,
-    circuits: Object.freeze([
-      Object.freeze({ id: 'A', label: 'Forward clutch' }),
-      Object.freeze({ id: 'B', label: 'Low brake' }),
-    ]),
+    circuits: Object.freeze([TEACHING_CLUTCH_ELEMENTS.A, TEACHING_CLUTCH_ELEMENTS.B]),
     result: 'Largest reduction for launch',
+    detail: 'A drives; B holds. The input turns 3.55 times for one output turn, giving about 3.55× ideal gearbox torque multiplication before losses. Best for starting; at a given road speed it also demands the highest engine RPM.',
   }),
   2: Object.freeze({
     gear: 2,
-    circuits: Object.freeze([
-      Object.freeze({ id: 'A', label: 'Forward clutch' }),
-      Object.freeze({ id: 'C', label: 'Second-gear brake' }),
-    ]),
+    circuits: Object.freeze([TEACHING_CLUTCH_ELEMENTS.A, TEACHING_CLUTCH_ELEMENTS.C]),
     result: 'Middle reduction for acceleration',
+    detail: 'A drives; C holds. The input turns 2.19 times per output turn: less launch leverage than G1, but 62% more output speed at the same input RPM. Used once the car is moving.',
   }),
   3: Object.freeze({
     gear: 3,
-    circuits: Object.freeze([
-      Object.freeze({ id: 'A', label: 'Forward clutch' }),
-      Object.freeze({ id: 'D', label: 'Direct clutch' }),
-    ]),
+    circuits: Object.freeze([TEACHING_CLUTCH_ELEMENTS.A, TEACHING_CLUTCH_ELEMENTS.D]),
     result: 'Smaller reduction for road speed',
+    detail: 'A and D couple two rotating paths. The input turns 1.52 times per output turn: 44% more output speed than G2 at the same input RPM, with 31% less ideal torque multiplication.',
   }),
   4: Object.freeze({
     gear: 4,
-    circuits: Object.freeze([
-      Object.freeze({ id: 'D', label: 'Direct clutch' }),
-      Object.freeze({ id: 'E', label: 'Fourth-gear brake' }),
-    ]),
+    circuits: Object.freeze([TEACHING_CLUTCH_ELEMENTS.D, TEACHING_CLUTCH_ELEMENTS.E]),
     result: 'Near-direct ratio for cruise',
+    detail: 'D drives; E holds. The input turns 1.16 times per output turn: 31% more output speed than G3 at the same input RPM, with 24% less ideal torque multiplication. Best for low-RPM cruising.',
   }),
 })

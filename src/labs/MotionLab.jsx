@@ -37,6 +37,12 @@ const DIFFERENTIAL_TURNS = Object.freeze([
 const DIFFERENTIAL_TURN_BY_ID = Object.fromEntries(DIFFERENTIAL_TURNS.map((turn) => [turn.id, turn]))
 const crankDegrees = (radians) => Math.round(radians * 180 / Math.PI)
 const rotationDialDuration = (rpm) => `${Math.min(4, Math.max(.3, 1200 / Math.max(1, Math.abs(rpm))))}s`
+const roadSpeedKphAtInputRpm = (rpm, gear) => {
+  const ratio = Math.abs(getGearRatio(gear))
+  if (!ratio) return 0
+  const wheelRpm = rpm / ratio / FINAL_DRIVE_RATIO
+  return wheelRpm * Math.PI * 2 * INITIAL.wheelRadius / 60 * 3.6
+}
 
 function CylinderCountLesson({ rpm }) {
   const eventsPerSecond = Math.max(0, rpm) * INLINE_FOUR_FIRING_EVENTS.length / 120
@@ -179,7 +185,7 @@ export default function MotionLab() {
   const [requestedGear, setRequestedGear] = useState(1)
   const [shift, setShift] = useState(null)
   const [shiftMessage, setShiftMessage] = useState('Gear 1 engaged')
-  const [gearComparison, setGearComparison] = useState({ from: 1, to: 2, preview: true })
+  const [hoveredGear, setHoveredGear] = useState(null)
   const [differentialTurn, setDifferentialTurn] = useState('straight')
   const [vehicle, setVehicle] = useState(() => stepVehicle(INITIAL, { throttle: 0.42, gear: 1 }, 0))
   const [hoveredPart, setHoveredPart] = useState(null)
@@ -232,13 +238,10 @@ export default function MotionLab() {
     : shift?.from ?? gear
   const displayedRatio = Math.abs(getGearRatio(displayedGear))
   const displayedApplication = TEACHING_GEAR_APPLICATIONS[displayedGear] || TEACHING_GEAR_APPLICATIONS[0]
-  const comparisonFromRatio = Math.abs(getGearRatio(gearComparison.from))
-  const comparisonToRatio = Math.abs(getGearRatio(gearComparison.to))
-  const sameRoadInputChange = (comparisonToRatio / comparisonFromRatio - 1) * 100
-  const sameInputOutputChange = (comparisonFromRatio / comparisonToRatio - 1) * 100
-  const comparisonDirection = comparisonToRatio < comparisonFromRatio ? 'Upshift' : 'Downshift'
-  const inputChangeArrow = sameRoadInputChange < 0 ? '↓' : '↑'
-  const outputChangeArrow = sameInputOutputChange < 0 ? '↓' : '↑'
+  const explainedGear = hoveredGear ?? requestedGear
+  const explainedApplication = TEACHING_GEAR_APPLICATIONS[explainedGear] || TEACHING_GEAR_APPLICATIONS[0]
+  const explainedRatio = Math.abs(getGearRatio(explainedGear))
+  const explainedRedlineSpeed = roadSpeedKphAtInputRpm(REDLINE_RPM, explainedGear)
   const liveRatioStatus = displayedGear === 0 ? 'Open'
     : shift?.stage === 'release'
       ? 'Open · old ratio released'
@@ -248,6 +251,12 @@ export default function MotionLab() {
   const liveGearboxInputRpm = displayedGear !== 0 && transmission.inputRpm < 1 && transmission.outputRpm > 0
     ? displayedRatio * transmission.outputRpm
     : transmission.inputRpm
+  const lowerGear = displayedGear > 1 ? displayedGear - 1 : null
+  const lowerGearRatio = lowerGear ? Math.abs(getGearRatio(lowerGear)) : 0
+  const downshiftInputRpm = lowerGear ? transmission.outputRpm * lowerGearRatio : 0
+  const downshiftSpeedLimit = lowerGear ? roadSpeedKphAtInputRpm(REDLINE_RPM, lowerGear) : 0
+  const downshiftRpmJump = lowerGear && displayedRatio > 0 ? (lowerGearRatio / displayedRatio - 1) * 100 : 0
+  const downshiftSafe = downshiftInputRpm <= REDLINE_RPM
   const selectedDifferentialTurn = DIFFERENTIAL_TURN_BY_ID[differentialTurn] || DIFFERENTIAL_TURN_BY_ID.straight
   const roadCarrierRpm = Math.abs(vehicle.speed) / (Math.PI * 2 * INITIAL.wheelRadius) * 60
   const differentialUsesTeachingSpeed = roadCarrierRpm < 45
@@ -322,9 +331,6 @@ export default function MotionLab() {
     const fromGear = shift?.to ?? gear
     const fromLabel = fromGear === 0 ? 'N' : fromGear
     const toLabel = nextGear === 0 ? 'N' : nextGear
-    if (fromGear > 0 && nextGear > 0 && fromGear !== nextGear) {
-      setGearComparison({ from: fromGear, to: nextGear, preview: false })
-    }
     setSelectedPart('gearbox')
     setShift({ from: fromGear, to: nextGear, stage: 'torque-cut' })
     setShiftMessage(`${fromLabel} → ${toLabel}: engine torque reduced`)
@@ -424,7 +430,7 @@ export default function MotionLab() {
     setRequestedGear(1)
     setShift(null)
     setShiftMessage('Gear 1 engaged')
-    setGearComparison({ from: 1, to: 2, preview: true })
+    setHoveredGear(null)
     setDifferentialTurn('straight')
     setHoveredPart(null)
     setSelectedPart('engine')
@@ -475,22 +481,45 @@ export default function MotionLab() {
             </header>
             <div className="motion-shift-gears" role="group" aria-label="Choose a transmission gear">
               {STUDY_GEARS.map((value) => (
-                <button key={value} type="button" onClick={() => chooseGear(value)} disabled={Boolean(shift)}
-                  className={`${requestedGear === value ? 'is-requested' : ''} ${gear === value ? 'is-engaged' : ''}`}
-                  aria-pressed={requestedGear === value} aria-label={value === 0 ? 'Shift to neutral' : `Shift to gear ${value}`}>
+                <button key={value} type="button" onClick={() => { setHoveredGear(null); chooseGear(value) }} disabled={Boolean(shift)}
+                  className={`${requestedGear === value ? 'is-requested' : ''} ${gear === value ? 'is-engaged' : ''} ${hoveredGear === value ? 'is-previewed' : ''}`}
+                  aria-pressed={requestedGear === value} aria-label={value === 0 ? 'Shift to neutral' : `Shift to gear ${value}`}
+                  aria-describedby="motion-gear-hover-explanation"
+                  onMouseEnter={() => setHoveredGear(value)} onMouseLeave={() => setHoveredGear(null)}
+                  onFocus={() => setHoveredGear(value)} onBlur={() => setHoveredGear(null)}>
                   <b>{value === 0 ? 'N' : value}</b>
                   <small>{value === 0 ? 'open' : `${getGearRatio(value).toFixed(2)}:1`}</small>
                   <i>{gear === value ? (value === 0 ? 'path open' : 'engaged') : 'select'}</i>
                 </button>
               ))}
             </div>
-            <div className="motion-selection-path" aria-live="polite">
+            {!shift && (hoveredGear === null ? (
+              <div id="motion-gear-hover-explanation" className="motion-gear-current-summary" aria-live="polite">
+                <strong>{displayedGear === 0 ? 'Neutral · path open' : `G${displayedGear} · ${displayedApplication.circuits.map((circuit) => circuit.id).join(' + ')}`}</strong>
+                <span>{displayedGear === 0 ? 'Input disconnected from output' : `${displayedRatio.toFixed(2)} input turns → 1 output turn`}</span>
+                <small>Hover or focus a gear to compare why its clutch pair is used.</small>
+              </div>
+            ) : (
+              <div id="motion-gear-hover-explanation" className="motion-gear-hover-explanation" aria-live="polite">
+                <header>
+                  <strong>{explainedGear === 0 ? 'Neutral · path open' : `G${explainedGear} · ${explainedApplication.circuits.map((circuit) => circuit.id).join(' + ')}`}</strong>
+                  <span>{explainedGear === 0 ? 'Input disconnected from output' : `${explainedRatio.toFixed(2)} input turns → 1 output turn`}</span>
+                </header>
+                <p>{explainedApplication.detail}</p>
+                <footer>{explainedGear === 0
+                  ? 'No friction pair is clamped.'
+                  : `Modeled redline limit ≈ ${explainedRedlineSpeed.toFixed(0)} km/h in G${explainedGear}.`}
+                  <b>All gear teeth stay meshed; the other packs stay open.</b>
+                </footer>
+              </div>
+            ))}
+            {shift && <div className="motion-selection-path" aria-live="polite">
               <span><small>Hydraulic selection</small><strong>{displayedApplication.circuits.length ? displayedApplication.circuits.map((circuit) => (
                 <b key={circuit.id}><i>{circuit.id}</i>{circuit.label}</b>
               )) : <b className="is-open">No clutches</b>}</strong></span>
               <i aria-hidden="true">→</i>
               <span><small>Torque path</small><b>{liveRatioStatus}</b></span>
-            </div>
+            </div>}
             {shift && <div className="motion-shift-phases" aria-label={shiftMessage}>
               {SHIFT_PHASES.map((phase, index) => (
                 <span key={phase.id} className={shift?.stage === phase.id ? 'is-active' : ''}>
@@ -542,32 +571,24 @@ export default function MotionLab() {
         {studyPartId === 'gearbox' ? (
           <section className="motion-gear-effect" style={{ '--part-color': activePart.color }} aria-live="polite">
             <header>
-              <span>{gearComparison.preview ? 'Try this shift' : 'Last shift'} · {comparisonDirection}</span>
+              <span>What input and output mean</span>
               <div className="motion-gear-effect__live"
                 aria-label={`Live gearbox rotation: input ${Math.round(liveGearboxInputRpm)} rpm, output ${Math.round(transmission.outputRpm)} rpm`}>
                 <span><i className={`motion-gear-effect__dial is-input ${liveGearboxInputRpm < 10 ? 'is-stopped' : ''}`}
-                  style={{ '--spin-duration': rotationDialDuration(liveGearboxInputRpm) }}><b /></i><small>Input</small><strong>{Math.round(liveGearboxInputRpm)}</strong></span>
+                  style={{ '--spin-duration': rotationDialDuration(liveGearboxInputRpm) }}><b /></i><small>Engine-side input</small><strong>{Math.round(liveGearboxInputRpm)} rpm</strong></span>
                 <em>vs</em>
                 <span><i className={`motion-gear-effect__dial is-output ${transmission.outputRpm < 10 ? 'is-stopped' : ''}`}
-                  style={{ '--spin-duration': rotationDialDuration(transmission.outputRpm) }}><b /></i><small>Output</small><strong>{Math.round(transmission.outputRpm)}</strong></span>
+                  style={{ '--spin-duration': rotationDialDuration(transmission.outputRpm) }}><b /></i><small>Driveshaft output</small><strong>{Math.round(transmission.outputRpm)} rpm</strong></span>
               </div>
-              <strong>G{gearComparison.from} {comparisonFromRatio.toFixed(2)}:1 → G{gearComparison.to} {comparisonToRatio.toFixed(2)}:1</strong>
+              <strong>{displayedGear === 0 ? 'Neutral · open' : `G${displayedGear} · ${displayedRatio.toFixed(2)} input turns = 1 output turn`}</strong>
             </header>
-            <div className="motion-gear-effect__row">
-              <b>At the shift<small>same road speed</small></b>
-              <span><small>Gearbox input</small><strong>{inputChangeArrow} {Math.abs(sameRoadInputChange).toFixed(0)}% rpm</strong></span>
-              <span><small>Output + wheels</small><strong>Same speed</strong></span>
-              <span><small>Gear leverage</small><strong>{comparisonFromRatio.toFixed(2)}× → {comparisonToRatio.toFixed(2)}×</strong></span>
-              <p>Road side held · input {inputChangeArrow}{Math.abs(sameRoadInputChange).toFixed(0)}% · wheels same</p>
+            <div className={`motion-downshift-check ${lowerGear ? (downshiftSafe ? 'is-safe' : 'is-blocked') : 'is-lowest'}`}>
+              <span>{lowerGear ? `Why slow before G${lowerGear}?` : 'Already in the lowest gear'}</span>
+              {lowerGear ? <p>At {speedKph.toFixed(0)} km/h, G{lowerGear} would force the engine-side input to <strong>{Math.round(downshiftInputRpm)} rpm</strong>—a {downshiftRpmJump.toFixed(0)}% jump. {downshiftSafe
+                ? `That is below the ${REDLINE_RPM.toLocaleString()} rpm redline, so the downshift is safe and restores more wheel torque.`
+                : `That exceeds the ${REDLINE_RPM.toLocaleString()} rpm redline, so this lab blocks the shift. Slow below about ${downshiftSpeedLimit.toFixed(0)} km/h first.`}</p>
+                : <p>G1 already gives the largest ratio and strongest launch leverage. An upshift lowers input RPM and trades some torque multiplication for more road speed.</p>}
             </div>
-            <div className="motion-gear-effect__row">
-              <b>Later<small>same gearbox-input rpm</small></b>
-              <span><small>Gearbox input</small><strong>Same rpm</strong></span>
-              <span><small>Output + wheels</small><strong>{outputChangeArrow} {Math.abs(sameInputOutputChange).toFixed(0)}% {sameInputOutputChange >= 0 ? 'faster' : 'slower'}</strong></span>
-              <span><small>Gear leverage</small><strong>{comparisonToRatio.toFixed(2)}× ideal</strong></span>
-              <p>Input held · wheels {outputChangeArrow}{Math.abs(sameInputOutputChange).toFixed(0)}% · leverage {inputChangeArrow}{Math.abs(sameRoadInputChange).toFixed(0)}%</p>
-            </div>
-            <footer>Witness markers are slowed equally; their relative rate is true · ideal locked-coupling comparison · 90% modeled efficiency</footer>
           </section>
         ) : studyPartId === 'differential' ? (
           <section className="motion-differential-effect" style={{ '--part-color': activePart.color }}>
@@ -662,6 +683,18 @@ export default function MotionLab() {
                     })}
                   </div>
                   <p className="gearbox-chart-note">This is a functional four-speed application chart. Real gearboxes may use different element names, but all select ratios by applying a specific clutch-and-brake combination.</p>
+                  <div className="gearbox-input-output-lesson">
+                    <header><span>Read the ratio from left to right</span><strong>{displayedGear === 0 ? 'Input disconnected from output' : `${displayedRatio.toFixed(2)} input turns → 1 output turn`}</strong></header>
+                    <div>
+                      <span><small>Engine-side input</small><b>{Math.round(liveGearboxInputRpm)} rpm</b><p>Rotation and torque entering from the torque converter.</p></span>
+                      <i aria-hidden="true">→</i>
+                      <span><small>Driveshaft output</small><b>{Math.round(transmission.outputRpm)} rpm</b><p>Rotation leaving for the final drive and wheels.</p></span>
+                    </div>
+                    <p><strong>No gear slides into mesh.</strong> {displayedApplication.detail} The other friction packs remain open so they do not fight this constraint.</p>
+                    {lowerGear && <p className={downshiftSafe ? 'is-safe' : 'is-blocked'}><strong>Why slow before G{lowerGear}?</strong> At the same {speedKph.toFixed(0)} km/h road speed, its larger {lowerGearRatio.toFixed(2)}:1 ratio would demand {Math.round(downshiftInputRpm)} input rpm. {downshiftSafe
+                      ? `That is safe and would restore more torque multiplication.`
+                      : `That exceeds the ${REDLINE_RPM.toLocaleString()} rpm redline; slow below about ${downshiftSpeedLimit.toFixed(0)} km/h first.`}</p>}
+                  </div>
                   <div className="gearbox-clutch-sequence">{SHIFT_PHASES.map((phase, index) => <span key={phase.id} className={shift?.stage === phase.id ? 'is-active' : ''}><b>{index + 1}</b>{phase.label}</span>)}</div>
                 </section>
               )}

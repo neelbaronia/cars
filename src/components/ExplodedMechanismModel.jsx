@@ -2,7 +2,7 @@ import { Edges, Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { TEACHING_GEAR_APPLICATIONS } from '../motionParts.js'
+import { TEACHING_CLUTCH_ELEMENTS, TEACHING_GEAR_APPLICATIONS } from '../motionParts.js'
 import { FINAL_DRIVE_RATIO, INLINE_FOUR_CYLINDERS, activePowerCylinder, getGearRatio, openDifferentialKinematics, sliderCrankPose } from '../physics.js'
 import { FlowDots, ForceArrow, PaintedBox } from './SceneKit.jsx'
 
@@ -25,13 +25,12 @@ const METERING_INJECTOR_PATHS = METERING_RUNNER_ZS.map((z) => [
   [.82, 1.2, z], [.86, .7, z], [.98, .25, z], [1.35, .07, z], [1.88, -.03, z],
 ])
 const GEAR_PATH_LANES = Object.freeze({ 1: -.72, 2: -.24, 3: .24, 4: .72 })
-const CLUTCH_CIRCUITS = Object.freeze([
-  Object.freeze({ id: 'A', label: 'FORWARD', y: .78 }),
-  Object.freeze({ id: 'B', label: 'LOW', y: .39 }),
-  Object.freeze({ id: 'C', label: 'SECOND', y: 0 }),
-  Object.freeze({ id: 'D', label: 'DIRECT', y: -.39 }),
-  Object.freeze({ id: 'E', label: 'OVERDRIVE', y: -.78 }),
-])
+const CLUTCH_CIRCUITS = Object.freeze(
+  Object.values(TEACHING_CLUTCH_ELEMENTS).map((element, index) => Object.freeze({
+    ...element,
+    y: .78 - index * .39,
+  })),
+)
 
 const clamp01 = (value, fallback = 0) => THREE.MathUtils.clamp(
   Number.isFinite(Number(value)) ? Number(value) : fallback,
@@ -483,20 +482,26 @@ function PlanetarySet({ inputSpeed, outputSpeed, selecting = false, torqueTransf
   )
 }
 
-function ClutchCircuitTag({ circuit, selected, pressurized }) {
+function ClutchCircuitTag({ circuit, selected, pressurized, selectedGear, applicationDetail }) {
+  const tooltipId = useId()
   if (!selected) return null
   return (
     <Html position={[0, 0, .43]} center sprite distanceFactor={8.5} zIndexRange={[80, 0]}
-      style={{ pointerEvents: 'none' }}>
-      <span className={`gear-clutch-tag is-selected ${pressurized ? 'is-pressurized' : ''}`}
-        aria-label={`${circuit.id} ${circuit.label} clutch selected`}>
+      wrapperClass="gear-clutch-tag-layer" style={{ pointerEvents: 'auto' }}>
+      <button type="button" className={`gear-clutch-tag is-selected ${pressurized ? 'is-pressurized' : ''}`}
+        aria-label={`${circuit.id} ${circuit.label} selected in gear ${selectedGear}`} aria-describedby={tooltipId}
+        onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
         <b>{circuit.id}</b>
-      </span>
+        <span id={tooltipId} role="tooltip" className="gear-clutch-tooltip">
+          <strong>{circuit.id} · {circuit.label}</strong><small>{circuit.role}</small>
+          {circuit.detail} <em>Active now in G{selectedGear}: {applicationDetail}</em>
+        </span>
+      </button>
     </Html>
   )
 }
 
-function MiniClutchPack({ circuit, inputSpeed, selected, clampAmount, pressurized }) {
+function MiniClutchPack({ circuit, inputSpeed, selected, clampAmount, pressurized, selectedGear, applicationDetail }) {
   const leftPlate = useRef()
   const rightPlate = useRef()
   const reducedMotion = useContext(ReducedMotionContext)
@@ -526,12 +531,13 @@ function MiniClutchPack({ circuit, inputSpeed, selected, clampAmount, pressurize
         <meshStandardMaterial color={pressurized ? '#2f9a96' : COLORS.metal} transparent opacity={selected ? .95 : .2}
           emissive="#2f9a96" emissiveIntensity={pressurized ? .6 : 0} />
       </mesh>
-      <ClutchCircuitTag circuit={circuit} selected={selected} pressurized={pressurized} />
+      <ClutchCircuitTag circuit={circuit} selected={selected} pressurized={pressurized}
+        selectedGear={selectedGear} applicationDetail={applicationDetail} />
     </group>
   )
 }
 
-function ClutchApplicationBank({ inputSpeed, selectedCircuitIds, clampAmount, pressurized }) {
+function ClutchApplicationBank({ inputSpeed, selectedCircuitIds, clampAmount, pressurized, selectedGear, applicationDetail }) {
   const selected = useMemo(() => new Set(selectedCircuitIds), [selectedCircuitIds])
   return (
     <group>
@@ -539,7 +545,8 @@ function ClutchApplicationBank({ inputSpeed, selectedCircuitIds, clampAmount, pr
       {CLUTCH_CIRCUITS.map((circuit) => <MiniClutchPack key={circuit.id} circuit={circuit}
         inputSpeed={inputSpeed} selected={selected.has(circuit.id)}
         clampAmount={selected.has(circuit.id) ? clampAmount : 0}
-        pressurized={selected.has(circuit.id) && pressurized} />)}
+        pressurized={selected.has(circuit.id) && pressurized} selectedGear={selectedGear}
+        applicationDetail={applicationDetail} />)}
     </group>
   )
 }
@@ -554,7 +561,7 @@ function ValvePortTag({ gear, active }) {
   )
 }
 
-function HydraulicGearSelector({ selectedGear, application, selecting, applying, statusLabel }) {
+function HydraulicGearSelector({ selectedGear, application, selecting, applying, statusLabel, showLabel }) {
   const spool = useRef()
   const reducedMotion = useContext(ReducedMotionContext)
   const portX = (Number(selectedGear) - 2) * .58
@@ -597,11 +604,11 @@ function HydraulicGearSelector({ selectedGear, application, selecting, applying,
         return <FlowDots key={circuit.id} points={points} color="#2f9a96" speed={.7 + index * .12}
           count={5} active={pressureMoving} radius={.038} />
       })}
-      <StudyLabel position={[.25, -1.76, 1.02]} color="#28778c" tooltipSide="above"
+      {showLabel && <StudyLabel position={[.25, -1.76, 1.02]} color="#28778c" tooltipSide="above"
         className="gearbox-study-label gearbox-study-label--valve"
         detail="A control unit commands hydraulic solenoids. The valve-body spool routes pressurized fluid to the clutch pair in the teaching application chart. Exact clutch names and combinations vary by transmission.">
         VALVE BODY · {statusLabel}
-      </StudyLabel>
+      </StudyLabel>}
     </group>
   )
 }
@@ -667,7 +674,8 @@ function GearboxStudy({
       <ExplodedPiece from={[0, 0, 0]} to={[0, -1.6, 0]}><PaintedBox size={[4.4, .42, 2.75]} color="#bda8d1" opacity={.2} /></ExplodedPiece>
       <ExplodedPiece from={[0, 0, 0]} to={[-1.75, 0, 0]}>
         <ClutchApplicationBank inputSpeed={inputSpeed} selectedCircuitIds={selectedCircuitIds}
-          clampAmount={clutchClamp} pressurized={clutchPressurized} />
+          clampAmount={clutchClamp} pressurized={clutchPressurized} selectedGear={displayGear}
+          applicationDetail={application.detail} />
       </ExplodedPiece>
       <ExplodedPiece from={[0, 0, 0]} to={[-.82, 0, 0]}>
         <WitnessRotor position={[0, 0, 0]} color="#2f9a96" speed={inputWitnessSpeed} haloOpacity={.62} />
@@ -703,16 +711,28 @@ function GearboxStudy({
       <FlowDots points={torquePath} color={COLORS.burn} speed={.35 + safeTransfer * .9}
         count={12} active={torqueFlowing} radius={.045} />
       <HydraulicGearSelector selectedGear={displayGear} application={application}
-        selecting={selecting} applying={applying} statusLabel={valveStatus} />
-      <StudyLabel position={[-2.2, -.92, .08]} color="#a9443a" tooltipSide="above"
+        selecting={selecting} applying={applying} statusLabel={valveStatus} showLabel={stage !== 'engaged'} />
+      {stage !== 'engaged' && <StudyLabel position={[-2.2, -.92, .08]} color="#a9443a" tooltipSide="above"
         className="gearbox-study-label gearbox-study-label--clutches"
-        detail="A ratio is established by clamping a specific pair of friction elements. The selected plates close; unselected packs remain released. Exact clutch names vary by transmission.">
+        detail={displayGear === 0
+          ? `${application.detail} Every friction pack is released.`
+          : `${applicationLabel} are clamped for G${displayGear}. ${application.detail} The unselected packs remain open so they do not fight the selected ratio. Exact element names vary by transmission.`}>
         FRICTION ELEMENTS · {displayGear === 0 ? 'OPEN' : applicationLabel}
-      </StudyLabel>
+      </StudyLabel>}
       <StudyLabel position={[.15, 1.25, 0]} color={COLORS.power}
         className="gearbox-study-label gearbox-study-label--planetary"
-        detail="The four thin selector rings are a teaching map of the available ratio circuits, not four literal gears. The glowing ring is the selected circuit. Real automatics combine several planetary members according to a clutch application chart.">
-        PLANETARY SCHEMATIC · {displayGear === 0 ? 'OPEN' : `${selecting ? 'TARGET ' : ''}G${displayGear} · ${ratio.toFixed(2)}:1`}
+        detail={`No gear slides into mesh: all planetary gears remain meshed. The active clutch-and-brake pair decides which path is driven, which reacts against the case, and therefore the ratio. ${application.detail} The four thin rings are a teaching map of these ratio circuits, not four literal gears.`}>
+        {displayGear === 0 ? 'RATIO OPEN' : `${selecting ? 'TARGET ' : ''}G${displayGear} · ${ratio.toFixed(2)}:1`}
+      </StudyLabel>
+      <StudyLabel position={[.34, .66, .92]} color="#28778c"
+        className="gearbox-study-label gearbox-study-label--input"
+        detail="Rotation and torque entering from the torque converter. Input RPM tracks engine RPM when the converter is locked, but fluid slip can let the two differ during launch and shifting.">
+        INPUT · {Math.round(inputRpm)} RPM
+      </StudyLabel>
+      <StudyLabel position={[1.38, -.88, .68]} color={COLORS.burn} tooltipSide="above"
+        className="gearbox-study-label gearbox-study-label--output"
+        detail="Rotation and torque leaving for the driveshaft. At a given road speed, output RPM is fixed by tire size and the 3.90:1 final drive. The selected gearbox ratio determines the input RPM required to sustain it.">
+        OUTPUT · {Math.round(outputRpm)} RPM
       </StudyLabel>
     </group>
   )

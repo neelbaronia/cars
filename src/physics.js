@@ -39,6 +39,23 @@ export const GEAR_RATIOS = Object.freeze({
 export const FINAL_DRIVE_RATIO = 3.9
 export const DRIVETRAIN_EFFICIENCY = 0.9
 
+// A representative four-speed shift map for the teaching automatic. The
+// controller raises every upshift point as accelerator demand rises, keeping a
+// lower gear engaged longer when the driver asks for acceleration. Downshift
+// lines sit below the matching upshift lines to provide hysteresis.
+export const AUTOMATIC_SHIFT_SCHEDULE = Object.freeze({
+  upshift: Object.freeze({
+    1: Object.freeze({ light: 17, heavy: 55 }),
+    2: Object.freeze({ light: 36, heavy: 85 }),
+    3: Object.freeze({ light: 60, heavy: 117 }),
+  }),
+  downshift: Object.freeze({
+    2: Object.freeze({ light: 10, heavy: 35 }),
+    3: Object.freeze({ light: 26, heavy: 61 }),
+    4: Object.freeze({ light: 48, heavy: 90 }),
+  }),
+})
+
 const MAX_ENGINE_RPM = 7200
 const STRAIGHT_LINE_RADIUS = 1_000_000_000
 const STOP_SPEED = 0.05
@@ -327,6 +344,109 @@ export function getGearRatio(gear = 0) {
   if (key === 'n' || key === 'neutral' || key === '0') return GEAR_RATIOS.neutral
   if (Object.hasOwn(GEAR_RATIOS, key)) return GEAR_RATIOS[key]
   return GEAR_RATIOS.neutral
+}
+
+const shiftLineAtPedal = (line, pedal) => (
+  line.light + (line.heavy - line.light) * pedal ** 1.08
+)
+
+/**
+ * Speed thresholds used by the representative four-speed automatic.
+ *
+ * Values are road speed in km/h. Higher accelerator demand moves the lines to
+ * the right: the controller holds a lower gear longer so the engine can make
+ * more power. Separate downshift lines keep the transmission from hunting back
+ * and forth when speed hovers near an upshift point.
+ */
+export function automaticShiftThresholds(throttle = 0) {
+  const pedal = clamp(finiteNumber(throttle), 0, 1)
+  return {
+    throttle: pedal,
+    upshift: Object.fromEntries(Object.entries(AUTOMATIC_SHIFT_SCHEDULE.upshift)
+      .map(([gear, line]) => [gear, shiftLineAtPedal(line, pedal)])),
+    downshift: Object.fromEntries(Object.entries(AUTOMATIC_SHIFT_SCHEDULE.downshift)
+      .map(([gear, line]) => [gear, shiftLineAtPedal(line, pedal)])),
+  }
+}
+
+/**
+ * Choose the next ratio in Drive from road speed and accelerator demand.
+ *
+ * The return value describes one adjacent shift at a time so the teaching
+ * animation can visibly release and apply each clutch pair. A rapid pedal push
+ * can request a downshift (kickdown), while a projected-input-rpm guard blocks
+ * any downshift that would over-speed the engine.
+ */
+export function automaticGearDecision({
+  speedKph = 0,
+  throttle = 0,
+  currentGear = 1,
+  wheelRadius = 0.31,
+  redlineRpm = REDLINE_RPM,
+} = {}) {
+  const speed = clamp(Math.abs(finiteNumber(speedKph)), 0, 300)
+  const pedal = clamp(finiteNumber(throttle), 0, 1)
+  const gear = clamp(Math.round(finiteNumber(currentGear, 1)), 1, 4)
+  const safeWheelRadius = clamp(finiteNumber(wheelRadius, 0.31), 0.1, 1.5)
+  const safeRedline = clamp(finiteNumber(redlineRpm, REDLINE_RPM), 1000, 20_000)
+  const thresholds = automaticShiftThresholds(pedal)
+  let targetGear = gear
+  let reason = 'hold'
+  let thresholdKph = gear < 4 ? thresholds.upshift[gear] : thresholds.downshift[gear]
+
+  if (gear < 4 && speed >= thresholds.upshift[gear]) {
+    targetGear = gear + 1
+    reason = 'upshift'
+    thresholdKph = thresholds.upshift[gear]
+  } else if (gear > 1 && speed <= thresholds.downshift[gear]) {
+    targetGear = gear - 1
+    reason = pedal >= 0.72 ? 'kickdown' : 'downshift'
+    thresholdKph = thresholds.downshift[gear]
+  }
+
+  const speedMps = speed / 3.6
+  const wheelRpm = speedMps / (2 * Math.PI * safeWheelRadius) * 60
+  const outputRpm = wheelRpm * FINAL_DRIVE_RATIO
+  let projectedInputRpm = outputRpm * Math.abs(getGearRatio(targetGear))
+
+  if (targetGear < gear && projectedInputRpm > safeRedline * 0.96) {
+    targetGear = gear
+    reason = 'protected'
+    projectedInputRpm = outputRpm * Math.abs(getGearRatio(gear))
+  }
+
+  const direction = targetGear > gear ? 'up' : targetGear < gear ? 'down' : 'hold'
+  const nextUpshift = gear < 4 ? thresholds.upshift[gear] : null
+  const nextDownshift = gear > 1 ? thresholds.downshift[gear] : null
+  const reasonDetail = reason === 'upshift'
+    ? `${speed.toFixed(0)} km/h crossed the ${gear}→${gear + 1} line at this pedal request.`
+    : reason === 'kickdown'
+      ? `High pedal demand moved the downshift line above ${speed.toFixed(0)} km/h, requesting more leverage.`
+      : reason === 'downshift'
+        ? `Road speed fell below the ${gear}→${gear - 1} downshift line.`
+        : reason === 'protected'
+          ? `The lower ratio would exceed the ${safeRedline.toFixed(0)} rpm protection limit.`
+          : gear === 4
+            ? 'Road speed and pedal demand remain inside the fourth-gear region.'
+            : `The controller is waiting for ${nextUpshift.toFixed(0)} km/h before the next upshift.`
+
+  return {
+    speedKph: speed,
+    throttle: pedal,
+    currentGear: gear,
+    targetGear,
+    direction,
+    reason,
+    reasonDetail,
+    willShift: targetGear !== gear,
+    kickdown: reason === 'kickdown',
+    thresholdKph,
+    nextUpshiftKph: nextUpshift,
+    nextDownshiftKph: nextDownshift,
+    projectedInputRpm,
+    outputRpm,
+    thresholds,
+  }
 }
 
 /**

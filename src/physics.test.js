@@ -9,6 +9,8 @@ import {
   INLINE_FOUR_FIRING_EVENTS,
   STOICHIOMETRIC_AIR_FUEL_RATIO,
   activePowerCylinder,
+  automaticGearDecision,
+  automaticShiftThresholds,
   clamp,
   drivetrainOutput,
   engineOutput,
@@ -37,6 +39,53 @@ test('clamp keeps values inside an inclusive interval', () => {
   assert.equal(clamp(-2, 0, 1), 0)
   assert.equal(clamp(0.4, 0, 1), 0.4)
   assert.equal(clamp(3, 0, 1), 1)
+})
+
+test('automatic shift map upshifts earlier with a light pedal', () => {
+  const light = automaticGearDecision({ speedKph: 30, throttle: 0.15, currentGear: 1 })
+  const heavy = automaticGearDecision({ speedKph: 30, throttle: 0.9, currentGear: 1 })
+
+  assert.equal(light.targetGear, 2)
+  assert.equal(light.reason, 'upshift')
+  assert.equal(heavy.targetGear, 1)
+  assert.equal(heavy.reason, 'hold')
+})
+
+test('automatic shift map uses hysteresis instead of hunting at one boundary', () => {
+  const thresholds = automaticShiftThresholds(0.4)
+  const betweenLines = (thresholds.downshift[2] + thresholds.upshift[1]) / 2
+  const decision = automaticGearDecision({ speedKph: betweenLines, throttle: 0.4, currentGear: 2 })
+
+  assert.ok(thresholds.downshift[2] < thresholds.upshift[1])
+  assert.equal(decision.targetGear, 2)
+  assert.equal(decision.reason, 'hold')
+})
+
+test('a large accelerator request can command a kickdown', () => {
+  const decision = automaticGearDecision({ speedKph: 52, throttle: 0.92, currentGear: 3 })
+
+  assert.equal(decision.targetGear, 2)
+  assert.equal(decision.reason, 'kickdown')
+  assert.equal(decision.direction, 'down')
+})
+
+test('automatic shift decision sanitizes inputs and protects an unsafe downshift', () => {
+  const sanitized = automaticGearDecision({
+    speedKph: Number.POSITIVE_INFINITY,
+    throttle: Number.NaN,
+    currentGear: Number.NEGATIVE_INFINITY,
+  })
+  const protectedShift = automaticGearDecision({
+    speedKph: 35,
+    throttle: 1,
+    currentGear: 2,
+    redlineRpm: 1000,
+  })
+
+  assertFiniteTree(sanitized, 'automaticGearDecision.invalid')
+  assert.equal(sanitized.currentGear, 1)
+  assert.equal(protectedShift.targetGear, 2)
+  assert.equal(protectedShift.reason, 'protected')
 })
 
 test('inline-four configuration is immutable and fires in 1-3-4-2 order', () => {
