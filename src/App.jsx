@@ -1,5 +1,4 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { CarFront, Github, Sparkles } from 'lucide-react'
 
 const EngineLab = lazy(() => import('./labs/EngineLab.jsx'))
 const MotionLab = lazy(() => import('./labs/MotionLab.jsx'))
@@ -45,27 +44,9 @@ export default function App() {
   return (
     <main className={`app-shell app-shell--${activeId === 'engine' ? 'painted-notes' : 'cake-box'}`}>
       <header className="site-header">
-        <a className="brand" href="#engine" onClick={(event) => { event.preventDefault(); chooseLab('engine') }}>
-          <span className="brand-mark"><CarFront size={22} /></span>
-          <span><strong>HOW A CAR WORKS</strong><small>A hands-on mechanics studio</small></span>
+        <a className="site-title" href="#engine" onClick={(event) => { event.preventDefault(); chooseLab('engine') }}>
+          How an Internal Combustion Engine Works
         </a>
-        <div className="header-note"><Sparkles size={16} /> Fuel · force · motion</div>
-        <div className="header-links">
-          <a
-            className="source-link"
-            href="https://github.com/neelbaronia/cars"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="View the How a Car Works source code on GitHub"
-          >
-            <Github size={14} aria-hidden="true" />
-            <span>GitHub</span>
-          </a>
-          <a className="site-credit" href="https://www.nbaronia.com" target="_blank" rel="noreferrer">
-            <span>Made by</span>
-            <strong>nbaronia</strong>
-          </a>
-        </div>
       </header>
 
       <nav className="lab-tabs" aria-label="Car mechanics experiments">
@@ -87,6 +68,12 @@ export default function App() {
       <div className="lab-stage" key={labs[activeIndex].id}>
         <Suspense fallback={<LoadingLab />}><ActiveLab /></Suspense>
       </div>
+
+      <footer className="site-footer">
+        <a href="https://github.com/neelbaronia/cars" target="_blank" rel="noreferrer">Source on GitHub</a>
+        <span aria-hidden="true">·</span>
+        <a href="https://www.nbaronia.com" target="_blank" rel="noreferrer">nbaronia.com</a>
+      </footer>
     </main>
   )
 }

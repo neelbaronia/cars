@@ -342,8 +342,8 @@ export default function SimulatorLab() {
 
   return (
     <div className="lab-layout lab-layout--cake-box">
-      <section className="demo-pane demo-pane--simulator" aria-label="Drivable car simulator with x-ray systems in Flavortown">
-        <div className="scene-toolbar"><SceneBadge>Flavortown · {telemetry.status} · {speedKph.toFixed(0)} km/h</SceneBadge><ResetButton onClick={reset} /></div>
+      <section className="demo-pane demo-pane--simulator" aria-label="Drivable car simulator with x-ray systems in an endless city">
+        <div className="scene-toolbar"><SceneBadge>City drive · {telemetry.status} · {speedKph.toFixed(0)} km/h</SceneBadge><ResetButton onClick={reset} /></div>
         <div className="scene-mode simulator-scene-mode">
           <Segmented label="Visible car system" value={focus} onChange={setFocus} options={[
             { value: 'body', label: 'Exterior' }, { value: 'live', label: 'Live' }, { value: 'power', label: 'Drivetrain' }, { value: 'brakes', label: 'Brakes' }, { value: 'steering', label: 'Steering' },
@@ -382,7 +382,7 @@ export default function SimulatorLab() {
       </section>
 
       <aside className="lesson-pane">
-        <SectionHeader kicker="Experiment 03 · Flavortown drive + x-ray" title="Drive Flavortown. Pull the car apart. Watch every command travel.">
+        <SectionHeader kicker="Experiment 03 · Drive + x-ray" title="Drive it. Pull the car apart. Watch every command travel.">
           The endless pastel city recycles around the car while the same physics continues underneath: fuel flows, shafts rotate, brake pressure builds, and steering links move.
         </SectionHeader>
 

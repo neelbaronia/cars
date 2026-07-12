@@ -9,9 +9,9 @@ export const MOTION_PARTS = [
   {
     id: 'engine', number: '02', short: 'ENGINE', name: 'Pistons + crankshaft', color: '#e6543f',
     summary: 'Combustion pressure becomes a twisting crankshaft.',
-    detail: 'Hot gas pushes the pistons. Connecting rods push off-center on the crank throws, turning straight piston force into engine torque. Multiple cylinders stagger their power strokes so the crank receives more frequent pushes.',
-    studyFlow: ['Gas pressure', 'Piston + connecting rod', 'Crankshaft torque'],
-    internals: ['Cylinder head, intake valve, and exhaust valve', 'Spark plug and combustion chamber', 'Piston and sealing rings', 'Connecting rod and crank throw', 'Crankshaft and output flywheel'],
+    detail: 'Hot gas pushes four pistons. Their connecting rods push off-center on a shared flat-plane crankshaft, turning straight piston force into engine torque. Cylinders 1 and 4 move together, cylinders 2 and 3 move together in the opposite phase, and the common 1-3-4-2 firing order gives the crank a new power stroke every 180°.',
+    studyFlow: ['Staggered gas-pressure pulses', 'Four pistons + connecting rods', 'Shared crankshaft torque'],
+    internals: ['Shared cylinder head with intake and exhaust valves', 'Four spark plugs and combustion chambers', 'Four pistons with sealing rings', 'Four connecting rods and crank throws', 'Shared flat-plane crankshaft and output flywheel'],
   },
   {
     id: 'coupling', number: '03', short: 'COUPLING', name: 'Flywheel + coupling', color: '#d38d27',

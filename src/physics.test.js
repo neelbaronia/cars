@@ -5,13 +5,17 @@ import {
   DRIVETRAIN_EFFICIENCY,
   FINAL_DRIVE_RATIO,
   IDLE_RPM,
+  INLINE_FOUR_CYLINDERS,
+  INLINE_FOUR_FIRING_EVENTS,
   STOICHIOMETRIC_AIR_FUEL_RATIO,
+  activePowerCylinder,
   clamp,
   drivetrainOutput,
   engineOutput,
   engineTorqueNm,
   gasolineMixtureOutput,
   getGearRatio,
+  sliderCrankPose,
   steeringOutput,
   stepVehicle,
   transmissionKinematics,
@@ -32,6 +36,93 @@ test('clamp keeps values inside an inclusive interval', () => {
   assert.equal(clamp(-2, 0, 1), 0)
   assert.equal(clamp(0.4, 0, 1), 0.4)
   assert.equal(clamp(3, 0, 1), 1)
+})
+
+test('inline-four configuration is immutable and fires in 1-3-4-2 order', () => {
+  assert.ok(Object.isFrozen(INLINE_FOUR_CYLINDERS))
+  assert.ok(INLINE_FOUR_CYLINDERS.every(Object.isFrozen))
+  assert.ok(Object.isFrozen(INLINE_FOUR_FIRING_EVENTS))
+  assert.deepEqual(
+    INLINE_FOUR_FIRING_EVENTS.map(({ cylinder }) => cylinder),
+    [1, 3, 4, 2],
+  )
+  assert.deepEqual(
+    INLINE_FOUR_FIRING_EVENTS.map(({ firingAngle }) => firingAngle),
+    [0, Math.PI, Math.PI * 2, Math.PI * 3],
+  )
+})
+
+test('flat-plane inline-four pairs cylinders 1 + 4 and 2 + 3', () => {
+  const cycleAngle = 0.73
+  const poses = new Map(INLINE_FOUR_CYLINDERS.map((cylinder) => [
+    cylinder.cylinder,
+    sliderCrankPose(cycleAngle + cylinder.crankThrowPhase),
+  ]))
+
+  assert.ok(Math.abs(poses.get(1).pistonPinY - poses.get(4).pistonPinY) < 1e-12)
+  assert.ok(Math.abs(poses.get(2).pistonPinY - poses.get(3).pistonPinY) < 1e-12)
+  assert.ok(Math.abs(poses.get(1).pistonPinY - poses.get(2).pistonPinY) > 0.1)
+  assert.ok(Math.abs(poses.get(1).crankPinZ - poses.get(4).crankPinZ) < 1e-12)
+  assert.ok(Math.abs(poses.get(2).crankPinZ - poses.get(3).crankPinZ) < 1e-12)
+})
+
+test('piston geometry repeats after 2π while firing identity repeats after 4π', () => {
+  const cycleAngle = 0.35
+
+  for (const cylinder of INLINE_FOUR_CYLINDERS) {
+    const first = sliderCrankPose(cycleAngle + cylinder.crankThrowPhase)
+    const nextTurn = sliderCrankPose(cycleAngle + Math.PI * 2 + cylinder.crankThrowPhase)
+    assert.ok(Math.abs(first.pistonPinY - nextTurn.pistonPinY) < 1e-12)
+    assert.ok(Math.abs(first.crankPinY - nextTurn.crankPinY) < 1e-12)
+    assert.ok(Math.abs(first.crankPinZ - nextTurn.crankPinZ) < 1e-12)
+  }
+
+  const firstPowerEvent = activePowerCylinder(cycleAngle)
+  const nextTurnPowerEvent = activePowerCylinder(cycleAngle + Math.PI * 2)
+  const nextCyclePowerEvent = activePowerCylinder(cycleAngle + Math.PI * 4)
+  assert.equal(firstPowerEvent.cylinder, 1)
+  assert.equal(nextTurnPowerEvent.cylinder, 4)
+  assert.equal(nextCyclePowerEvent.cylinder, firstPowerEvent.cylinder)
+  assert.ok(Math.abs(nextCyclePowerEvent.progress - firstPowerEvent.progress) < 1e-12)
+})
+
+test('active inline-four power event reports normalized stroke progress', () => {
+  const cases = [
+    [0, 1],
+    [Math.PI, 3],
+    [Math.PI * 2, 4],
+    [Math.PI * 3, 2],
+  ]
+
+  for (const [firingAngle, cylinder] of cases) {
+    const start = activePowerCylinder(firingAngle)
+    const halfway = activePowerCylinder(firingAngle + Math.PI / 2)
+    assert.equal(start.cylinder, cylinder)
+    assert.equal(start.progress, 0)
+    assert.equal(halfway.cylinder, cylinder)
+    assert.ok(Math.abs(halfway.progress - 0.5) < 1e-12)
+  }
+})
+
+test('inline-four kinematics sanitize invalid dimensions and cycle angles', () => {
+  const invalidPose = sliderCrankPose(Number.NaN, {
+    crankCenterY: Number.POSITIVE_INFINITY,
+    crankRadius: Number.NEGATIVE_INFINITY,
+    rodLength: Number.NaN,
+    pistonCrownOffset: Number.POSITIVE_INFINITY,
+  })
+  const shortRodPose = sliderCrankPose(Number.MAX_VALUE, {
+    crankRadius: 8,
+    rodLength: 0.01,
+  })
+  const invalidEvent = activePowerCylinder(Number.NEGATIVE_INFINITY)
+
+  assertFiniteTree(invalidPose, 'sliderCrankPose.invalid')
+  assertFiniteTree(shortRodPose, 'sliderCrankPose.shortRod')
+  assertFiniteTree(invalidEvent, 'activePowerCylinder.invalid')
+  assert.ok(shortRodPose.rodLength > shortRodPose.crankRadius)
+  assert.equal(invalidEvent.cylinder, 1)
+  assert.equal(invalidEvent.progress, 0)
 })
 
 test('gasoline mixture output anchors stoichiometric combustion at 14.7:1', () => {

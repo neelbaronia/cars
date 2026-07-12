@@ -4,6 +4,27 @@ export const IDLE_RPM = 850
 export const REDLINE_RPM = 6800
 export const STOICHIOMETRIC_AIR_FUEL_RATIO = 14.7
 
+const TWO_PI = Math.PI * 2
+const FOUR_STROKE_CYCLE_RADIANS = Math.PI * 4
+const POWER_STROKE_RADIANS = Math.PI
+
+// A conventional flat-plane inline-four. Cylinders are numbered from the
+// front of the engine toward the flywheel. Cylinders 1 + 4 share one crank
+// phase, while 2 + 3 share the opposite phase. Their combustion events remain
+// distinct because a four-stroke cycle takes two crankshaft revolutions.
+export const INLINE_FOUR_CYLINDERS = Object.freeze([
+  Object.freeze({ cylinder: 1, x: -1.08, crankThrowPhase: 0, firingAngle: 0 }),
+  Object.freeze({ cylinder: 2, x: -0.36, crankThrowPhase: Math.PI, firingAngle: Math.PI * 3 }),
+  Object.freeze({ cylinder: 3, x: 0.36, crankThrowPhase: Math.PI, firingAngle: Math.PI }),
+  Object.freeze({ cylinder: 4, x: 1.08, crankThrowPhase: 0, firingAngle: Math.PI * 2 }),
+])
+
+// Sorted separately from physical cylinder order so teaching views can step
+// directly through the common 1-3-4-2 firing order.
+export const INLINE_FOUR_FIRING_EVENTS = Object.freeze(
+  [...INLINE_FOUR_CYLINDERS].sort((a, b) => a.firingAngle - b.firingAngle),
+)
+
 export const GEAR_RATIOS = Object.freeze({
   reverse: -3.54,
   neutral: 0,
@@ -87,6 +108,76 @@ export const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 const finiteNumber = (value, fallback = 0) => (
   Number.isFinite(Number(value)) ? Number(value) : fallback
 )
+
+const positiveModulo = (value, modulus) => ((value % modulus) + modulus) % modulus
+
+/**
+ * Position a piston, crankpin, and connecting rod with slider-crank geometry.
+ *
+ * Angles are crankshaft radians and zero places the piston at top dead center.
+ * Defaults match the exploded teaching model; callers may override dimensions
+ * without risking a negative square root or non-finite render coordinates.
+ */
+export function sliderCrankPose(crankAngle = 0, options = {}) {
+  const safeOptions = options && typeof options === 'object' ? options : {}
+  const angle = positiveModulo(finiteNumber(crankAngle), TWO_PI)
+  const crankCenterY = clamp(finiteNumber(safeOptions.crankCenterY, -1.05), -1000, 1000)
+  const crankRadius = clamp(Math.abs(finiteNumber(safeOptions.crankRadius, 0.38)), 0, 100)
+  const requestedRodLength = Math.abs(finiteNumber(safeOptions.rodLength, 1.35))
+  const rodLength = clamp(Math.max(requestedRodLength, crankRadius + 1e-6), 1e-6, 1000)
+  const pistonCrownOffset = clamp(
+    finiteNumber(safeOptions.pistonCrownOffset, 0.18),
+    -100,
+    100,
+  )
+
+  const crankPinZ = Math.sin(angle) * crankRadius
+  const crankPinY = crankCenterY + Math.cos(angle) * crankRadius
+  const radicand = Math.max(0, rodLength ** 2 - crankPinZ ** 2)
+  const pistonPinY = crankPinY + Math.sqrt(radicand)
+  const rodDeltaY = crankPinY - pistonPinY
+  const rodDeltaZ = crankPinZ
+
+  return {
+    crankAngle: angle,
+    crankCenterY,
+    crankRadius,
+    rodLength,
+    crankPinY,
+    crankPinZ,
+    pistonPinY,
+    pistonY: pistonPinY + pistonCrownOffset,
+    rodMidpointY: (pistonPinY + crankPinY) / 2,
+    rodMidpointZ: crankPinZ / 2,
+    rodDeltaY,
+    rodDeltaZ,
+  }
+}
+
+/**
+ * Return the inline-four cylinder currently in its idealized 180° power
+ * window. `cycleAngle` spans a 720° / 4π four-stroke cycle. The returned
+ * progress is normalized from 0 at ignition/TDC to 1 just before BDC.
+ */
+export function activePowerCylinder(cycleAngle = 0) {
+  const angle = positiveModulo(finiteNumber(cycleAngle), FOUR_STROKE_CYCLE_RADIANS)
+  let event = INLINE_FOUR_FIRING_EVENTS[INLINE_FOUR_FIRING_EVENTS.length - 1]
+
+  for (const candidate of INLINE_FOUR_FIRING_EVENTS) {
+    if (candidate.firingAngle > angle) break
+    event = candidate
+  }
+
+  const elapsed = positiveModulo(angle - event.firingAngle, FOUR_STROKE_CYCLE_RADIANS)
+  return {
+    ...event,
+    progress: clamp(elapsed / POWER_STROKE_RADIANS, 0, 1),
+  }
+}
+
+// Compatibility name used by early engine-study work while the public helper
+// was being integrated.
+export const activeInlineFourPowerEvent = activePowerCylinder
 
 function interpolateCurve(curve, value) {
   if (value <= curve[0][0]) return curve[0][1]

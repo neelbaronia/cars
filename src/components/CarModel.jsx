@@ -240,6 +240,98 @@ function Seat({ x, z, opacity }) {
   )
 }
 
+function GuyFieriDriver({ opacity = 1 }) {
+  const materialProps = {
+    roughness: .78,
+    transparent: opacity < 1,
+    opacity,
+    depthWrite: opacity > .55,
+  }
+  const skin = '#d9a06f'
+  const hair = '#f4e5b4'
+  const beard = '#6a4936'
+  const shirt = '#242b2d'
+  const denim = '#46545b'
+  const hairSpikes = [
+    { position: [-.57, 1.43, .08], rotation: [0, 0, 0] },
+    { position: [-.68, 1.405, .08], rotation: [0, 0, .5] },
+    { position: [-.46, 1.405, .08], rotation: [0, 0, -.5] },
+    { position: [-.57, 1.405, -.025], rotation: [-.48, 0, 0] },
+    { position: [-.57, 1.405, .185], rotation: [.48, 0, 0] },
+  ]
+
+  return (
+    <group>
+      <RoundedPiece size={[.32, .18, .24]} position={[-.57, .67, -.08]}
+        color={denim} opacity={opacity} radius={.07} />
+      <RoundedPiece size={[.42, .45, .24]} position={[-.57, .96, .07]} rotation={[-.1, 0, 0]}
+        color={shirt} opacity={opacity} radius={.1} />
+
+      {[
+        [-.68, .82, -.06, '#e6543f', -.18],
+        [-.57, .79, -.06, '#f2c348', 0],
+        [-.46, .83, -.06, '#e9872f', .18],
+      ].map(([x, y, z, color, tilt]) => (
+        <mesh key={`${x}-${color}`} position={[x, y, z]} rotation={[0, 0, tilt]}>
+          <coneGeometry args={[.055, .18, 5]} />
+          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={.08} {...materialProps} />
+        </mesh>
+      ))}
+
+      <Tube start={[-.76, 1.07, .05]} end={[-.82, .93, -.04]} color={shirt} radius={.068} opacity={opacity} />
+      <Tube start={[-.82, .93, -.04]} end={[-.8, 1.03, -.18]} color={skin} radius={.052} opacity={opacity} />
+      <Tube start={[-.38, 1.07, .05]} end={[-.31, .93, -.04]} color={shirt} radius={.068} opacity={opacity} />
+      <Tube start={[-.31, .93, -.04]} end={[-.36, 1.03, -.18]} color={skin} radius={.052} opacity={opacity} />
+      {[[-.8, 1.03, -.18], [-.36, 1.03, -.18]].map((position, index) => (
+        <mesh key={index} position={position} castShadow={opacity > .55}>
+          <dodecahedronGeometry args={[.062, 0]} />
+          <meshStandardMaterial color={skin} {...materialProps} />
+        </mesh>
+      ))}
+
+      {[-.69, -.45].map((x) => (
+        <group key={x}>
+          <Tube start={[x, .66, -.08]} end={[x, .46, -.48]} color={denim} radius={.072} opacity={opacity} />
+          <Tube start={[x, .46, -.48]} end={[x, .2, -.72]} color={denim} radius={.066} opacity={opacity} />
+          <RoundedPiece size={[.16, .1, .25]} position={[x, .17, -.78]} color="#252d30" opacity={opacity} radius={.045} />
+        </group>
+      ))}
+
+      <mesh position={[-.57, 1.29, .08]} castShadow={opacity > .55}>
+        <dodecahedronGeometry args={[.15, 1]} />
+        <meshStandardMaterial color={skin} {...materialProps} />
+      </mesh>
+      <mesh position={[-.57, 1.395, .095]} scale={[1, .48, 1]} castShadow={opacity > .55}>
+        <sphereGeometry args={[.154, 12, 7]} />
+        <meshStandardMaterial color={hair} {...materialProps} />
+      </mesh>
+      {hairSpikes.map((spike, index) => (
+        <mesh key={index} position={spike.position} rotation={spike.rotation} castShadow={opacity > .55}>
+          <coneGeometry args={[.047, .16, 5]} />
+          <meshStandardMaterial color={hair} {...materialProps} />
+        </mesh>
+      ))}
+
+      {[-.645, -.495].map((x) => (
+        <RoundedPiece key={x} size={[.13, .075, .026]} position={[x, 1.29, -.06]}
+          color="#20292c" opacity={opacity} radius={.025} />
+      ))}
+      <Tube start={[-.58, 1.29, -.073]} end={[-.56, 1.29, -.073]}
+        color="#20292c" radius={.012} opacity={opacity} />
+      <mesh position={[-.57, 1.235, -.076]} castShadow={false}>
+        <dodecahedronGeometry args={[.035, 0]} />
+        <meshStandardMaterial color={skin} {...materialProps} />
+      </mesh>
+      <RoundedPiece size={[.105, .024, .023]} position={[-.57, 1.205, -.071]}
+        color={beard} opacity={opacity} radius={.012} />
+      <mesh position={[-.57, 1.145, -.045]} rotation={[0, 0, Math.PI]}>
+        <coneGeometry args={[.055, .13, 6]} />
+        <meshStandardMaterial color={beard} {...materialProps} />
+      </mesh>
+    </group>
+  )
+}
+
 function Wheel({ position, steer = 0, speed = 0, brake = 0, explode = 0, focus = 'all', front = false }) {
   const rotating = useRef()
   const steeringPivot = useRef()
@@ -344,7 +436,7 @@ function DriveShaft({ y = -.14, startZ = -.08, endZ = 1.55, speed = 0, opacity =
   )
 }
 
-function SteeringWheel({ position, steerRadians, opacity }) {
+function SteeringWheel({ position, steerRadians, opacity, xray = false }) {
   const rotating = useRef()
   useFrame((_, delta) => {
     if (!rotating.current) return
@@ -355,27 +447,27 @@ function SteeringWheel({ position, steerRadians, opacity }) {
       delta,
     )
   })
-  const materialProps = { transparent: true, opacity, depthTest: false, depthWrite: false }
+  const materialProps = { transparent: true, opacity, depthTest: !xray, depthWrite: false }
   return (
     <group position={position} rotation={[-.18, 0, 0]} renderOrder={28}>
       <group ref={rotating}>
         <mesh renderOrder={28}>
-          <torusGeometry args={[.26, .035, 9, 26]} />
+          <torusGeometry args={[.22, .032, 9, 26]} />
           <meshBasicMaterial color={COLORS.steering} {...materialProps} />
         </mesh>
         {[0, Math.PI * 2 / 3, Math.PI * 4 / 3].map((angle) => (
           <group key={angle} rotation={[0, 0, angle]}>
-            <mesh position={[0, .115, 0]} renderOrder={28}>
-              <boxGeometry args={[.035, .23, .025]} />
+            <mesh position={[0, .095, 0]} renderOrder={28}>
+              <boxGeometry args={[.032, .19, .024]} />
               <meshBasicMaterial color={COLORS.steering} {...materialProps} />
             </mesh>
           </group>
         ))}
         <mesh renderOrder={28}>
-          <sphereGeometry args={[.065, 12, 9]} />
+          <sphereGeometry args={[.058, 12, 9]} />
           <meshBasicMaterial color={COLORS.cream} {...materialProps} />
         </mesh>
-        <mesh position={[0, .255, .01]} renderOrder={29}>
+        <mesh position={[0, .215, .01]} renderOrder={29}>
           <sphereGeometry args={[.042, 10, 8]} />
           <meshBasicMaterial color={COLORS.combustion} {...materialProps} />
         </mesh>
@@ -425,6 +517,15 @@ export function CarModel({
   const steeringBaseOpacity = responsiveSystemOpacity(focus, 'steering', steeringActive)
   const steeringOpacity = steeringActive ? Math.max(.92, steeringBaseOpacity) : steeringBaseOpacity
   const suspensionOpacity = responsiveSystemOpacity(focus, 'suspension', suspensionActive)
+  const anyDriverCommand = gasActive || brakeActive || steeringActive
+  const occupantOpacity = focus === 'body' ? .98
+    : focus === 'steering' ? .88
+      : focus === 'live' ? (anyDriverCommand ? .7 : .42)
+        : focus === 'all' || focus === 'drive' ? .48
+          : focus === 'forces' ? .32 : .24
+  const cockpitX = -explode * .34
+  const cockpitY = explode * .86
+  const cockpitZ = -explode * .08
   const engineY = explode * .55
   const engineZ = -1.72 - explode * .42
   const transmissionY = explode * .2
@@ -439,8 +540,9 @@ export function CarModel({
   const fuelPumpZ = 1.5 + explode * .2
   const masterX = -.56 - explode * .42
   const masterY = .52 + explode * .42
-  const steeringWheelY = 1.02 + explode * .5
-  const steeringWheelZ = -.18 + explode * .12
+  const steeringWheelX = -.58 + cockpitX
+  const steeringWheelY = .82 + cockpitY
+  const steeringWheelZ = -.18 + cockpitZ
   const rackY = -.01 - explode * .12
   const rackZ = -1.88 - explode * .4
   const rackShift = steerRadians * .46
@@ -476,17 +578,18 @@ export function CarModel({
     [[masterX, masterY, -.58], [.7, -.1, .25], [.92, -.12, REAR_AXLE_Z], [wheelX, -.08, REAR_AXLE_Z]],
   ], [masterX, masterY, wheelX])
   const steeringPaths = useMemo(() => [
-    [[-.58, steeringWheelY, steeringWheelZ], [-.58, .62, -.52], [rackShift, rackY, rackZ]],
+    [[steeringWheelX, steeringWheelY, steeringWheelZ], [steeringWheelX, .62 + cockpitY * .35, -.52 + cockpitZ], [rackShift, rackY, rackZ]],
     [[rackShift - 1.02, rackY, rackZ], [-wheelX, -.04, FRONT_AXLE_Z]],
     [[rackShift + 1.02, rackY, rackZ], [wheelX, -.04, FRONT_AXLE_Z]],
-  ], [rackShift, rackY, rackZ, steeringWheelY, steeringWheelZ, wheelX])
+  ], [cockpitY, cockpitZ, rackShift, rackY, rackZ, steeringWheelX, steeringWheelY, steeringWheelZ, wheelX])
 
   return (
     <group>
       <BodyShell opacity={bodyOpacity} panelOpacity={panelOpacity} explode={explode} />
 
-      <group position={[-explode * .34, explode * .86, -explode * .08]}>
+      <group position={[cockpitX, cockpitY, cockpitZ]}>
         <Seat x={-.57} z={-.18} opacity={Math.min(.82, .28 + bodyOpacity)} />
+        <GuyFieriDriver opacity={occupantOpacity} />
       </group>
       <group position={[explode * .34, explode * .86, -explode * .08]}>
         <Seat x={.57} z={-.18} opacity={Math.min(.82, .28 + bodyOpacity)} />
@@ -532,9 +635,11 @@ export function CarModel({
           active={serviceBrakeActive} speed={.75 + brake} count={4} lineWidth={4} />)}
       </group>
 
+      <SteeringWheel position={[steeringWheelX, steeringWheelY, steeringWheelZ]}
+        steerRadians={steerRadians}
+        opacity={focus === 'body' ? .9 : Math.max(.2, steeringOpacity)}
+        xray={focus !== 'body' && steeringOpacity > .5} />
       <group visible={steeringOpacity > .02}>
-        <SteeringWheel position={[-.58, steeringWheelY, steeringWheelZ]}
-          steerRadians={steerRadians} opacity={steeringOpacity} />
         <group ref={rackVisual} position={[rackShift, 0, 0]}>
           <RoundedPiece size={[2.35, .16, .18]} position={[0, rackY, rackZ]}
             color={COLORS.steering} opacity={steeringOpacity} radius={.06} />
@@ -564,7 +669,7 @@ export function CarModel({
         fuelTank: [0, fuelTankY + .65, fuelTankZ], fuelRail: [-.42, engineY + .9, engineZ],
         engine: [0, engineY + 1.02, engineZ], transmission: [0, transmissionY + .58, transmissionZ],
         differential: [0, differentialY + .68, differentialZ], masterCylinder: [masterX, masterY + .76, -.58],
-        steeringWheel: [-.58, steeringWheelY + .4, steeringWheelZ], rack: [rackShift, rackY + .56, rackZ],
+        steeringWheel: [steeringWheelX, steeringWheelY + .4, steeringWheelZ], rack: [rackShift, rackY + .56, rackZ],
       }} />
     </group>
   )

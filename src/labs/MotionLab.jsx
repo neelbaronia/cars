@@ -8,17 +8,16 @@ import { MotionDrivetrainModel } from '../components/MotionDrivetrainModel.jsx'
 import { RenderFallback, ResetButton, SceneBadge, SectionHeader, Segmented, Slider } from '../components/LabUI.jsx'
 import { ForceArrow, StudioFloor, StudioLights } from '../components/SceneKit.jsx'
 import { MOTION_PARTS, TEACHING_GEAR_APPLICATIONS } from '../motionParts.js'
-import { REDLINE_RPM, drivetrainOutput, engineOutput, getGearRatio, stepVehicle, transmissionKinematics } from '../physics.js'
+import { INLINE_FOUR_FIRING_EVENTS, REDLINE_RPM, drivetrainOutput, engineOutput, getGearRatio, stepVehicle, transmissionKinematics } from '../physics.js'
 import { usePerspectiveInput } from '../usePerspectiveInput.js'
 
 const INITIAL = { speed: 0, rpm: 850, heading: 0, x: 0, z: 0, gear: 1, mass: 1450, wheelRadius: 0.31, wheelbase: 2.7 }
 const PART_BY_ID = Object.fromEntries(MOTION_PARTS.map((part) => [part.id, part]))
-const FOUR_CYLINDER_EVENTS = [0, 180, 360, 540]
 const SHIFT_PHASES = [
-  { id: 'torque-cut', label: 'Unload old clutch pair' },
-  { id: 'release', label: 'Release old pair' },
-  { id: 'select', label: 'Route pressure to new pair' },
-  { id: 'apply', label: 'Clamp new pair' },
+  { id: 'torque-cut', label: 'Unload old clutch pair', short: 'Cut' },
+  { id: 'release', label: 'Release old pair', short: 'Open' },
+  { id: 'select', label: 'Route pressure to new pair', short: 'Route' },
+  { id: 'apply', label: 'Clamp new pair', short: 'Clamp' },
 ]
 const SHIFT_TRANSFER = { 'torque-cut': 0.32, release: 0, select: 0, apply: 0.55 }
 const SHIFT_TIMING = { release: 650, select: 1350, apply: 2100, complete: 3000 }
@@ -30,31 +29,17 @@ const GEAR_ROLES = [
   { gear: 4, role: 'Cruise', note: 'Near direct drive' },
 ]
 const STUDY_GEARS = [0, 1, 2, 3, 4]
-
-function clutchPairLabel(application) {
-  if (!application?.circuits.length) return 'No clutch pair applied'
-  return application.circuits.map((circuit) => `${circuit.id} ${circuit.label}`).join(' + ')
-}
-
-function shiftSelectionMessage(shift, application) {
-  const pair = clutchPairLabel(application)
-  if (!shift) return `${pair} remain clamped, holding the selected ratio.`
-  if (shift.stage === 'torque-cut') return 'Engine torque falls first so the loaded friction plates can separate cleanly.'
-  if (shift.stage === 'release') return 'The old clutch pair opens. Input and output are briefly disconnected.'
-  if (shift.stage === 'select') return `The valve-body spool moves and routes hydraulic pressure toward ${pair}.`
-  if (shift.stage === 'apply') return `${pair} squeeze together; torque rises as the new ratio takes the load.`
-  return `${pair} establish the selected ratio.`
-}
+const crankDegrees = (radians) => Math.round(radians * 180 / Math.PI)
 
 function CylinderCountLesson({ rpm }) {
-  const eventsPerSecond = Math.max(0, rpm) * FOUR_CYLINDER_EVENTS.length / 120
+  const eventsPerSecond = Math.max(0, rpm) * INLINE_FOUR_FIRING_EVENTS.length / 120
   return (
     <section className="cylinder-count-lesson" aria-label="Why a four-stroke engine uses multiple cylinders">
       <header><span>Why multiple cylinders?</span><strong>A new crankshaft push every 180°</strong></header>
       <p>One four-stroke cylinder produces one power stroke every two crank turns, or 720°. Four evenly phased cylinders divide that cycle into four power events.</p>
       <div className="cylinder-fire-sequence" aria-label="Four power events spaced at zero, 180, 360, and 540 crankshaft degrees">
-        {FOUR_CYLINDER_EVENTS.map((angle, index) => (
-          <span key={angle}><b>Cyl {index + 1}</b><i aria-hidden="true">●</i><small>{angle}°</small></span>
+        {INLINE_FOUR_FIRING_EVENTS.map((event) => (
+          <span key={event.cylinder}><b>Cyl {event.cylinder}</b><i aria-hidden="true">●</i><small>{crankDegrees(event.firingAngle)}°</small></span>
         ))}
       </div>
       <div className="cylinder-event-rate">At {rpm.toFixed(0)} rpm: <strong>about {eventsPerSecond.toFixed(0)} power events each second</strong></div>
@@ -64,6 +49,7 @@ function CylinderCountLesson({ rpm }) {
         <span><b>The cost</b><small>More pistons, valves, bearings, and surfaces add friction, weight, complexity, and expense.</small></span>
       </div>
       <p className="cylinder-count-caveat"><strong>Cylinder count alone does not set power.</strong> Total displacement, airflow, boost, combustion efficiency, and rpm matter too.</p>
+      <p className="cylinder-count-caveat"><strong>1–3–4–2 is a common inline-four firing order.</strong> Other engine layouts can use different orders.</p>
     </section>
   )
 }
@@ -88,7 +74,7 @@ function MovingRoadMarks({ speed }) {
   )
 }
 
-function MotionScene({ speed, rpm, throttle, gear, engagedGear, requestedGear, torqueTransfer, shiftStage, roadForce, brake, brakePressureBar, brakeForce, transmission, activePart, hoveredPart, onHover, onSelect, perspectiveInputRef, viewResetSignal, studyPartId }) {
+function MotionScene({ speed, rpm, throttle, gear, engagedGear, requestedGear, torqueTransfer, shiftStage, roadForce, brake, brakePressureBar, brakeForce, transmission, activePart, hoveredPart, onHover, onSelect, onEnginePowerCylinder, perspectiveInputRef, viewResetSignal, studyPartId }) {
   const { camera, size } = useThree()
   const controls = useRef()
   const cameraTarget = useRef(new THREE.Vector3(0, -0.05, 0))
@@ -153,7 +139,8 @@ function MotionScene({ speed, rpm, throttle, gear, engagedGear, requestedGear, t
           engagedGear={engagedGear} targetGear={requestedGear} torqueTransfer={torqueTransfer} shiftStage={shiftStage || 'engaged'}
           inputRpm={transmission.inputRpm} outputRpm={transmission.outputRpm}
           gearboxTorque={transmission.gearboxOutputTorque} wheelTorque={transmission.wheelTorque} roadForce={roadForce}
-          brake={brake} brakePressureBar={brakePressureBar} brakeForce={brakeForce} />
+          brake={brake} brakePressureBar={brakePressureBar} brakeForce={brakeForce}
+          onEnginePowerCylinder={onEnginePowerCylinder} />
       ) : (
         <>
           <MovingRoadMarks speed={speed} />
@@ -188,6 +175,7 @@ export default function MotionLab() {
   const [hoveredPart, setHoveredPart] = useState(null)
   const [selectedPart, setSelectedPart] = useState('engine')
   const [studyPartId, setStudyPartId] = useState(null)
+  const [activeCylinder, setActiveCylinder] = useState(1)
   const [webglLost, setWebglLost] = useState(false)
   const [rendererKey, setRendererKey] = useState(0)
   const [viewResetSignal, setViewResetSignal] = useState(0)
@@ -234,7 +222,16 @@ export default function MotionLab() {
     : shift?.from ?? gear
   const displayedRatio = Math.abs(getGearRatio(displayedGear))
   const displayedApplication = TEACHING_GEAR_APPLICATIONS[displayedGear] || TEACHING_GEAR_APPLICATIONS[0]
-  const selectionMessage = shiftSelectionMessage(shift, displayedApplication)
+  const displayedCircuitIds = displayedApplication.circuits.map((circuit) => circuit.id)
+  const displayedCircuitLabel = displayedCircuitIds.length ? displayedCircuitIds.join(' + ') : 'None'
+  const gearboxConnectionLabel = displayedGear === 0
+    ? 'No clutch pair · path open'
+    : `${displayedCircuitLabel} · ${shift ? (SHIFT_PHASES.find((phase) => phase.id === shift.stage)?.short || 'Shifting') : 'clamped'}`
+  const gearboxStudyFlow = [
+    `Input · ${Math.round(transmission.inputRpm)} rpm`,
+    gearboxConnectionLabel,
+    `Output · ${Math.round(transmission.outputRpm)} rpm · ${Math.round(transmission.gearboxOutputTorque)} N·m`,
+  ]
   const activePartId = studyPartId || hoveredPart || selectedPart
   const activePart = PART_BY_ID[activePartId] || PART_BY_ID.engine
   const speedKph = Math.abs(vehicle.speed) * 3.6
@@ -397,6 +394,7 @@ export default function MotionLab() {
     setHoveredPart(null)
     setSelectedPart('engine')
     setStudyPartId(null)
+    setActiveCylinder(1)
     releasePerspective()
     setViewResetSignal((value) => value + 1)
     setVehicle(stepVehicle(INITIAL, { throttle: 0.42, gear: 1 }, 0))
@@ -423,22 +421,22 @@ export default function MotionLab() {
           </div>
         )}
         {studyPartId === 'engine' && (
-          <div className="motion-cylinder-summary" aria-hidden="true">
-            <span>Why four cylinders?</span>
-            <strong>One power event every 180°</strong>
-            <div>{FOUR_CYLINDER_EVENTS.map((angle) => <i key={angle}>{angle}°</i>)}</div>
-            <p>Each cylinder fires once per 720°. Staggering four pushes makes crankshaft torque much steadier.</p>
-            <b>≈ {(Math.max(0, vehicle.rpm) * 4 / 120).toFixed(0)} events/s at {vehicle.rpm.toFixed(0)} rpm</b>
+          <div className="motion-cylinder-summary" style={{ '--part-color': activePart.color }} aria-hidden="true">
+            <span>Common inline-four · firing 1–3–4–2</span>
+            <strong>A power stroke every 180°</strong>
+            <div>{INLINE_FOUR_FIRING_EVENTS.map((event) => <i key={event.cylinder} className={activeCylinder === event.cylinder ? 'is-active' : ''}><b>C{event.cylinder}</b><small>{crankDegrees(event.firingAngle)}°</small></i>)}</div>
+            <p><strong>Piston motion:</strong> 1 + 4 together · 2 + 3 opposite.<br /><strong>Combustion:</strong> each cylinder fires once per 720°.</p>
+            <b>≈ {(Math.max(0, vehicle.rpm) * 4 / 120).toFixed(0)} real events/s at {vehicle.rpm.toFixed(0)} rpm · animation slowed</b>
           </div>
         )}
         {studyPartId === 'gearbox' && (
           <section className={`motion-shift-deck ${shift ? 'is-shifting' : ''}`}
             style={{ '--part-color': activePart.color }} aria-label="Shift the exploded transmission">
             <header>
-              <span>Slow-motion teaching shift</span>
-              <strong>{shift
-                ? `${shift.from === 0 ? 'N' : shift.from} → ${shift.to === 0 ? 'N' : shift.to}`
-                : `${gear === 0 ? 'Neutral' : `Gear ${gear}`} engaged`}</strong>
+              <span>Select a ratio</span>
+              <strong aria-live="polite">{shift
+                ? `${shift.from === 0 ? 'N' : shift.from} → ${shift.to === 0 ? 'N' : shift.to} · ${SHIFT_PHASES.find((phase) => phase.id === shift.stage)?.short || 'Shift'}`
+                : gear === 0 ? 'Neutral · path open' : `Gear ${gear} · ${Math.abs(getGearRatio(gear)).toFixed(2)}:1`}</strong>
             </header>
             <div className="motion-shift-gears" role="group" aria-label="Choose a transmission gear">
               {STUDY_GEARS.map((value) => (
@@ -451,31 +449,20 @@ export default function MotionLab() {
                 </button>
               ))}
             </div>
-            <div className="motion-ratio-trade" aria-live="polite">
-              {displayedGear === 0 ? (
-                <><span><small>Input</small><b>engine side spins</b></span><i>×</i><span><small>Output</small><b>coasts separately</b></span></>
-              ) : (
-                <><span><small>Input</small><b>{displayedRatio.toFixed(2)} turns</b></span><i>→</i><span><small>Output</small><b>1 turn</b></span><i>·</i><span><small>Torque trade</small><b>≈ {displayedRatio.toFixed(2)}×</b></span></>
-              )}
-            </div>
-            <div className="motion-clutch-command" aria-live="polite">
-              <span>Valve body applies</span>
-              <div>{displayedApplication.circuits.length ? displayedApplication.circuits.map((circuit) => (
+            <div className="motion-selection-path" aria-live="polite">
+              <span><small>Hydraulic selection</small><strong>{displayedApplication.circuits.length ? displayedApplication.circuits.map((circuit) => (
                 <b key={circuit.id}><i>{circuit.id}</i>{circuit.label}</b>
-              )) : <b className="is-open">No clutch pair · torque path open</b>}</div>
-              <p>{selectionMessage}</p>
-              <small>{Math.round(torqueTransfer * 100)}% torque crossing · functional teaching chart; exact clutch combinations vary.</small>
+              )) : <b className="is-open">No clutches</b>}</strong></span>
+              <i aria-hidden="true">→</i>
+              <span><small>Torque path</small><b>{displayedGear === 0 ? 'Open' : `${Math.round(torqueTransfer * 100)}% · ${displayedRatio.toFixed(2)}:1`}</b></span>
             </div>
-            <div className="motion-shift-phases" aria-label={shiftMessage}>
+            {shift && <div className="motion-shift-phases" aria-label={shiftMessage}>
               {SHIFT_PHASES.map((phase, index) => (
                 <span key={phase.id} className={shift?.stage === phase.id ? 'is-active' : ''}>
-                  <b>{index + 1}</b>{phase.label}
+                  <b>{index + 1}</b>{phase.short}
                 </span>
               ))}
-            </div>
-            <button type="button" className="motion-shift-demo" onClick={runShiftDemo} disabled={Boolean(shift)}>
-              <Play size={13} /> Run the automatic 1→4 demo
-            </button>
+            </div>}
           </section>
         )}
         {webglLost ? <RenderFallback onRetry={retryRenderer} /> : (
@@ -486,7 +473,7 @@ export default function MotionLab() {
               roadForce={drivetrain.tractionLimitedForce} brake={brake / 100} brakePressureBar={brakePressureBar}
               brakeForce={drivetrain.brakeForce} transmission={transmission}
               activePart={activePartId} hoveredPart={hoveredPart}
-              onHover={setHoveredPart} onSelect={openStudy} perspectiveInputRef={perspectiveInputRef}
+              onHover={setHoveredPart} onSelect={openStudy} onEnginePowerCylinder={setActiveCylinder} perspectiveInputRef={perspectiveInputRef}
               viewResetSignal={viewResetSignal} studyPartId={studyPartId} />
           </Canvas>
         )}
@@ -501,8 +488,8 @@ export default function MotionLab() {
 
         {studyPartId ? (
           <div className="motion-study-flow" style={{ '--part-color': activePart.color }}>
-            <span>Internal handoff</span>
-            {activePart.studyFlow.map((item, index) => <b key={item}>{index + 1}<em>{item}</em>{index < activePart.studyFlow.length - 1 && <i>→</i>}</b>)}
+            <span>{studyPartId === 'gearbox' ? 'Live handoff' : 'Internal handoff'}</span>
+            {(studyPartId === 'gearbox' ? gearboxStudyFlow : activePart.studyFlow).map((item, index) => <b key={`${index}-${item}`}>{index + 1}<em>{item}</em>{index < 2 && <i>→</i>}</b>)}
           </div>
         ) : (
           <div className="motion-torque-strip" aria-label="Live torque path">
