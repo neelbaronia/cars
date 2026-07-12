@@ -8,7 +8,7 @@ import { MotionDrivetrainModel } from '../components/MotionDrivetrainModel.jsx'
 import { RenderFallback, ResetButton, SceneBadge, SectionHeader, Segmented, Slider } from '../components/LabUI.jsx'
 import { ForceArrow, StudioFloor, StudioLights } from '../components/SceneKit.jsx'
 import { MOTION_PARTS, TEACHING_GEAR_APPLICATIONS } from '../motionParts.js'
-import { INLINE_FOUR_FIRING_EVENTS, REDLINE_RPM, drivetrainOutput, engineOutput, getGearRatio, stepVehicle, transmissionKinematics } from '../physics.js'
+import { FINAL_DRIVE_RATIO, INLINE_FOUR_FIRING_EVENTS, REDLINE_RPM, drivetrainOutput, engineOutput, getGearRatio, openDifferentialKinematics, stepVehicle, transmissionKinematics } from '../physics.js'
 import { usePerspectiveInput } from '../usePerspectiveInput.js'
 
 const INITIAL = { speed: 0, rpm: 850, heading: 0, x: 0, z: 0, gear: 1, mass: 1450, wheelRadius: 0.31, wheelbase: 2.7 }
@@ -29,7 +29,14 @@ const GEAR_ROLES = [
   { gear: 4, role: 'Cruise', note: 'Near direct drive' },
 ]
 const STUDY_GEARS = [0, 1, 2, 3, 4]
+const DIFFERENTIAL_TURNS = Object.freeze([
+  Object.freeze({ id: 'left', label: '↶ Left turn', bias: .3 }),
+  Object.freeze({ id: 'straight', label: '↑ Straight', bias: 0 }),
+  Object.freeze({ id: 'right', label: 'Right turn ↷', bias: -.3 }),
+])
+const DIFFERENTIAL_TURN_BY_ID = Object.fromEntries(DIFFERENTIAL_TURNS.map((turn) => [turn.id, turn]))
 const crankDegrees = (radians) => Math.round(radians * 180 / Math.PI)
+const rotationDialDuration = (rpm) => `${Math.min(4, Math.max(.3, 1200 / Math.max(1, Math.abs(rpm))))}s`
 
 function CylinderCountLesson({ rpm }) {
   const eventsPerSecond = Math.max(0, rpm) * INLINE_FOUR_FIRING_EVENTS.length / 120
@@ -74,7 +81,7 @@ function MovingRoadMarks({ speed }) {
   )
 }
 
-function MotionScene({ speed, rpm, throttle, gear, engagedGear, requestedGear, torqueTransfer, shiftStage, roadForce, brake, brakePressureBar, brakeForce, transmission, activePart, hoveredPart, onHover, onSelect, onEnginePowerCylinder, perspectiveInputRef, viewResetSignal, studyPartId }) {
+function MotionScene({ speed, rpm, throttle, gear, engagedGear, requestedGear, torqueTransfer, shiftStage, roadForce, brake, brakePressureBar, brakeForce, transmission, activePart, hoveredPart, onHover, onSelect, onEnginePowerCylinder, perspectiveInputRef, viewResetSignal, studyPartId, differentialTurnBias }) {
   const { camera, size } = useThree()
   const controls = useRef()
   const cameraTarget = useRef(new THREE.Vector3(0, -0.05, 0))
@@ -140,6 +147,7 @@ function MotionScene({ speed, rpm, throttle, gear, engagedGear, requestedGear, t
           inputRpm={transmission.inputRpm} outputRpm={transmission.outputRpm}
           gearboxTorque={transmission.gearboxOutputTorque} wheelTorque={transmission.wheelTorque} roadForce={roadForce}
           brake={brake} brakePressureBar={brakePressureBar} brakeForce={brakeForce}
+          differentialTurnBias={differentialTurnBias}
           onEnginePowerCylinder={onEnginePowerCylinder} />
       ) : (
         <>
@@ -171,6 +179,8 @@ export default function MotionLab() {
   const [requestedGear, setRequestedGear] = useState(1)
   const [shift, setShift] = useState(null)
   const [shiftMessage, setShiftMessage] = useState('Gear 1 engaged')
+  const [gearComparison, setGearComparison] = useState({ from: 1, to: 2, preview: true })
+  const [differentialTurn, setDifferentialTurn] = useState('straight')
   const [vehicle, setVehicle] = useState(() => stepVehicle(INITIAL, { throttle: 0.42, gear: 1 }, 0))
   const [hoveredPart, setHoveredPart] = useState(null)
   const [selectedPart, setSelectedPart] = useState('engine')
@@ -222,16 +232,36 @@ export default function MotionLab() {
     : shift?.from ?? gear
   const displayedRatio = Math.abs(getGearRatio(displayedGear))
   const displayedApplication = TEACHING_GEAR_APPLICATIONS[displayedGear] || TEACHING_GEAR_APPLICATIONS[0]
-  const displayedCircuitIds = displayedApplication.circuits.map((circuit) => circuit.id)
-  const displayedCircuitLabel = displayedCircuitIds.length ? displayedCircuitIds.join(' + ') : 'None'
-  const gearboxConnectionLabel = displayedGear === 0
-    ? 'No clutch pair · path open'
-    : `${displayedCircuitLabel} · ${shift ? (SHIFT_PHASES.find((phase) => phase.id === shift.stage)?.short || 'Shifting') : 'clamped'}`
-  const gearboxStudyFlow = [
-    `Input · ${Math.round(transmission.inputRpm)} rpm`,
-    gearboxConnectionLabel,
-    `Output · ${Math.round(transmission.outputRpm)} rpm · ${Math.round(transmission.gearboxOutputTorque)} N·m`,
-  ]
+  const comparisonFromRatio = Math.abs(getGearRatio(gearComparison.from))
+  const comparisonToRatio = Math.abs(getGearRatio(gearComparison.to))
+  const sameRoadInputChange = (comparisonToRatio / comparisonFromRatio - 1) * 100
+  const sameInputOutputChange = (comparisonFromRatio / comparisonToRatio - 1) * 100
+  const comparisonDirection = comparisonToRatio < comparisonFromRatio ? 'Upshift' : 'Downshift'
+  const inputChangeArrow = sameRoadInputChange < 0 ? '↓' : '↑'
+  const outputChangeArrow = sameInputOutputChange < 0 ? '↓' : '↑'
+  const liveRatioStatus = displayedGear === 0 ? 'Open'
+    : shift?.stage === 'release'
+      ? 'Open · old ratio released'
+      : shift?.stage === 'select'
+        ? `Pending · ${displayedRatio.toFixed(2)}:1`
+        : `${Math.round(torqueTransfer * 100)}% · ${displayedRatio.toFixed(2)}:1`
+  const liveGearboxInputRpm = displayedGear !== 0 && transmission.inputRpm < 1 && transmission.outputRpm > 0
+    ? displayedRatio * transmission.outputRpm
+    : transmission.inputRpm
+  const selectedDifferentialTurn = DIFFERENTIAL_TURN_BY_ID[differentialTurn] || DIFFERENTIAL_TURN_BY_ID.straight
+  const roadCarrierRpm = Math.abs(vehicle.speed) / (Math.PI * 2 * INITIAL.wheelRadius) * 60
+  const differentialUsesTeachingSpeed = roadCarrierRpm < 45
+  const differentialCarrierRpm = differentialUsesTeachingSpeed ? 120 : roadCarrierRpm
+  const differentialSpeeds = openDifferentialKinematics({
+    carrierSpeed: differentialCarrierRpm,
+    turnBias: selectedDifferentialTurn.bias,
+  })
+  const differentialLeftRole = differentialTurn === 'straight' ? 'same speed'
+    : differentialTurn === 'left' ? 'inner · slower' : 'outer · faster'
+  const differentialRightRole = differentialTurn === 'straight' ? 'same speed'
+    : differentialTurn === 'left' ? 'outer · faster' : 'inner · slower'
+  const differentialLeftArrow = differentialTurn === 'straight' ? '→' : differentialTurn === 'left' ? '↓' : '↑'
+  const differentialRightArrow = differentialTurn === 'straight' ? '→' : differentialTurn === 'left' ? '↑' : '↓'
   const activePartId = studyPartId || hoveredPart || selectedPart
   const activePart = PART_BY_ID[activePartId] || PART_BY_ID.engine
   const speedKph = Math.abs(vehicle.speed) * 3.6
@@ -251,7 +281,7 @@ export default function MotionLab() {
     coupling: gear === 0 ? 'Engine turning; no drive gear selected' : 'Coupling carries rotation toward the selected gear',
     gearbox: gear === 0 ? 'Neutral · 0.00:1 · torque path open' : `Gear ${gear} · ${gearRatio.toFixed(2)}:1 · ${gearboxTorque.toFixed(0)} N·m after gearbox losses`,
     shaft: gear === 0 ? 'No driven torque in neutral' : `${gearboxTorque.toFixed(0)} N·m carried toward the rear axle`,
-    differential: `${drivetrain.wheelTorque.toFixed(0)} N·m after the 3.90:1 final drive`,
+    differential: `${drivetrain.wheelTorque.toFixed(0)} N·m total driven-axle torque after the 3.90:1 final drive`,
     tires: roadForceDirection ? `${roadForcePhrase} force at the road` : 'No longitudinal force at the road',
     brakes: `${brakePressureBar.toFixed(0)} bar · ${(drivetrain.brakeForce / 1000).toFixed(1)} kN slowing force · ${brakingPowerKw.toFixed(1)} kW to heat`,
   }
@@ -292,6 +322,9 @@ export default function MotionLab() {
     const fromGear = shift?.to ?? gear
     const fromLabel = fromGear === 0 ? 'N' : fromGear
     const toLabel = nextGear === 0 ? 'N' : nextGear
+    if (fromGear > 0 && nextGear > 0 && fromGear !== nextGear) {
+      setGearComparison({ from: fromGear, to: nextGear, preview: false })
+    }
     setSelectedPart('gearbox')
     setShift({ from: fromGear, to: nextGear, stage: 'torque-cut' })
     setShiftMessage(`${fromLabel} → ${toLabel}: engine torque reduced`)
@@ -303,7 +336,7 @@ export default function MotionLab() {
     }, SHIFT_TIMING.release))
     shiftTimers.current.push(window.setTimeout(() => {
       setShift((current) => current ? { ...current, stage: 'select' } : current)
-      setShiftMessage(`${fromLabel} → ${toLabel}: planetary ratio selected`)
+      setShiftMessage(`${fromLabel} → ${toLabel}: pressure routed; new friction elements filling`)
     }, SHIFT_TIMING.select))
     shiftTimers.current.push(window.setTimeout(() => {
       setGear(nextGear)
@@ -391,6 +424,8 @@ export default function MotionLab() {
     setRequestedGear(1)
     setShift(null)
     setShiftMessage('Gear 1 engaged')
+    setGearComparison({ from: 1, to: 2, preview: true })
+    setDifferentialTurn('straight')
     setHoveredPart(null)
     setSelectedPart('engine')
     setStudyPartId(null)
@@ -454,7 +489,7 @@ export default function MotionLab() {
                 <b key={circuit.id}><i>{circuit.id}</i>{circuit.label}</b>
               )) : <b className="is-open">No clutches</b>}</strong></span>
               <i aria-hidden="true">→</i>
-              <span><small>Torque path</small><b>{displayedGear === 0 ? 'Open' : `${Math.round(torqueTransfer * 100)}% · ${displayedRatio.toFixed(2)}:1`}</b></span>
+              <span><small>Torque path</small><b>{liveRatioStatus}</b></span>
             </div>
             {shift && <div className="motion-shift-phases" aria-label={shiftMessage}>
               {SHIFT_PHASES.map((phase, index) => (
@@ -463,6 +498,24 @@ export default function MotionLab() {
                 </span>
               ))}
             </div>}
+          </section>
+        )}
+        {studyPartId === 'differential' && (
+          <section className="motion-differential-deck" style={{ '--part-color': activePart.color }}
+            aria-label="Open differential cornering demonstration">
+            <header><span>Open differential demo</span><strong>{selectedDifferentialTurn.label.replace(/[↶↑↷]/g, '').trim()}</strong></header>
+            <div className="motion-differential-turns" role="group" aria-label="Choose a driving path">
+              {DIFFERENTIAL_TURNS.map((turn) => (
+                <button key={turn.id} type="button" className={differentialTurn === turn.id ? 'is-active' : ''}
+                  aria-pressed={differentialTurn === turn.id} onClick={() => setDifferentialTurn(turn.id)}>
+                  {turn.label}
+                </button>
+              ))}
+            </div>
+            <p aria-live="polite">{differentialTurn === 'straight'
+              ? 'Both axles match the carrier; the spider gears do not spin relative to it.'
+              : `${differentialTurn === 'left' ? 'Left' : 'Right'} is the shorter inside path. The opposite axle speeds up by the same amount.`}</p>
+            <footer><b>Speed may split ±30%</b><span>Ideal axle torque ≈ equal</span></footer>
           </section>
         )}
         {webglLost ? <RenderFallback onRetry={retryRenderer} /> : (
@@ -474,7 +527,7 @@ export default function MotionLab() {
               brakeForce={drivetrain.brakeForce} transmission={transmission}
               activePart={activePartId} hoveredPart={hoveredPart}
               onHover={setHoveredPart} onSelect={openStudy} onEnginePowerCylinder={setActiveCylinder} perspectiveInputRef={perspectiveInputRef}
-              viewResetSignal={viewResetSignal} studyPartId={studyPartId} />
+              viewResetSignal={viewResetSignal} studyPartId={studyPartId} differentialTurnBias={selectedDifferentialTurn.bias} />
           </Canvas>
         )}
 
@@ -486,10 +539,53 @@ export default function MotionLab() {
           </div>
         )}
 
-        {studyPartId ? (
+        {studyPartId === 'gearbox' ? (
+          <section className="motion-gear-effect" style={{ '--part-color': activePart.color }} aria-live="polite">
+            <header>
+              <span>{gearComparison.preview ? 'Try this shift' : 'Last shift'} · {comparisonDirection}</span>
+              <div className="motion-gear-effect__live"
+                aria-label={`Live gearbox rotation: input ${Math.round(liveGearboxInputRpm)} rpm, output ${Math.round(transmission.outputRpm)} rpm`}>
+                <span><i className={`motion-gear-effect__dial is-input ${liveGearboxInputRpm < 10 ? 'is-stopped' : ''}`}
+                  style={{ '--spin-duration': rotationDialDuration(liveGearboxInputRpm) }}><b /></i><small>Input</small><strong>{Math.round(liveGearboxInputRpm)}</strong></span>
+                <em>vs</em>
+                <span><i className={`motion-gear-effect__dial is-output ${transmission.outputRpm < 10 ? 'is-stopped' : ''}`}
+                  style={{ '--spin-duration': rotationDialDuration(transmission.outputRpm) }}><b /></i><small>Output</small><strong>{Math.round(transmission.outputRpm)}</strong></span>
+              </div>
+              <strong>G{gearComparison.from} {comparisonFromRatio.toFixed(2)}:1 → G{gearComparison.to} {comparisonToRatio.toFixed(2)}:1</strong>
+            </header>
+            <div className="motion-gear-effect__row">
+              <b>At the shift<small>same road speed</small></b>
+              <span><small>Gearbox input</small><strong>{inputChangeArrow} {Math.abs(sameRoadInputChange).toFixed(0)}% rpm</strong></span>
+              <span><small>Output + wheels</small><strong>Same speed</strong></span>
+              <span><small>Gear leverage</small><strong>{comparisonFromRatio.toFixed(2)}× → {comparisonToRatio.toFixed(2)}×</strong></span>
+              <p>Road side held · input {inputChangeArrow}{Math.abs(sameRoadInputChange).toFixed(0)}% · wheels same</p>
+            </div>
+            <div className="motion-gear-effect__row">
+              <b>Later<small>same gearbox-input rpm</small></b>
+              <span><small>Gearbox input</small><strong>Same rpm</strong></span>
+              <span><small>Output + wheels</small><strong>{outputChangeArrow} {Math.abs(sameInputOutputChange).toFixed(0)}% {sameInputOutputChange >= 0 ? 'faster' : 'slower'}</strong></span>
+              <span><small>Gear leverage</small><strong>{comparisonToRatio.toFixed(2)}× ideal</strong></span>
+              <p>Input held · wheels {outputChangeArrow}{Math.abs(sameInputOutputChange).toFixed(0)}% · leverage {inputChangeArrow}{Math.abs(sameRoadInputChange).toFixed(0)}%</p>
+            </div>
+            <footer>Witness markers are slowed equally; their relative rate is true · ideal locked-coupling comparison · 90% modeled efficiency</footer>
+          </section>
+        ) : studyPartId === 'differential' ? (
+          <section className="motion-differential-effect" style={{ '--part-color': activePart.color }}>
+            <header>
+              <span>Open differential · {selectedDifferentialTurn.label.replace(/[↶↑↷]/g, '').trim()}</span>
+              <strong>{differentialUsesTeachingSpeed ? 'Slow-motion teaching rotation' : `Live carrier · ${Math.round(differentialCarrierRpm)} rpm`}</strong>
+            </header>
+            <div className="motion-differential-readout">
+              <span className="is-left"><small>Vehicle left</small><strong>{Math.round(differentialSpeeds.leftSpeed)} rpm {differentialLeftArrow}</strong><b>{differentialLeftRole} · {(1 - selectedDifferentialTurn.bias).toFixed(2)}×</b></span>
+              <span className="is-carrier"><small>Carrier average</small><strong>{Math.round(differentialSpeeds.carrierSpeed)} rpm</strong><b>({Math.round(differentialSpeeds.leftSpeed)} + {Math.round(differentialSpeeds.rightSpeed)}) ÷ 2</b></span>
+              <span className="is-right"><small>Vehicle right</small><strong>{Math.round(differentialSpeeds.rightSpeed)} rpm {differentialRightArrow}</strong><b>{differentialRightRole} · {(1 + selectedDifferentialTurn.bias).toFixed(2)}×</b></span>
+            </div>
+            <footer><span>Pinion ≈ {Math.round(differentialSpeeds.carrierSpeed * FINAL_DRIVE_RATIO)} rpm before 3.90:1 reduction</span><b>Different speed, approximately equal torque · low grip on one side can limit both</b></footer>
+          </section>
+        ) : studyPartId ? (
           <div className="motion-study-flow" style={{ '--part-color': activePart.color }}>
-            <span>{studyPartId === 'gearbox' ? 'Live handoff' : 'Internal handoff'}</span>
-            {(studyPartId === 'gearbox' ? gearboxStudyFlow : activePart.studyFlow).map((item, index) => <b key={`${index}-${item}`}>{index + 1}<em>{item}</em>{index < 2 && <i>→</i>}</b>)}
+            <span>Internal handoff</span>
+            {activePart.studyFlow.map((item, index) => <b key={`${index}-${item}`}>{index + 1}<em>{item}</em>{index < 2 && <i>→</i>}</b>)}
           </div>
         ) : (
           <div className="motion-torque-strip" aria-label="Live torque path">
@@ -512,7 +608,9 @@ export default function MotionLab() {
             onChange={(value) => { setThrottle(value); if (!studyPartId) setSelectedPart('metering') }}
             hint="Requests more engine torque by admitting more air and matching fuel." />
           <div className="gear-selector">
-            <div className="gear-control-heading"><span>Requested gear</span><b>{gear === 0 ? 'N' : gear} mechanically engaged</b></div>
+            <div className="gear-control-heading"><span>Requested gear</span><b>{gear === 0
+              ? (shift ? `${shift.from === 0 ? 'N' : shift.from}→${shift.to === 0 ? 'N' : shift.to} · torque path open` : 'Neutral · torque path open')
+              : `${gear} mechanically engaged`}</b></div>
             <Segmented label="Transmission gear" value={requestedGear} onChange={chooseGear}
               options={[{ value: 0, label: 'N' }, 1, 2, 3, 4].map((value) => typeof value === 'number' ? { value, label: String(value) } : value)} />
             <div className="shift-command-row">
@@ -548,11 +646,12 @@ export default function MotionLab() {
                   <div className="gearbox-live-readouts">
                     <span><small>Engine</small><b>{vehicle.rpm.toFixed(0)} rpm</b></span>
                     <span><small>Gearbox input</small><b>{transmission.inputRpm.toFixed(0)} rpm</b></span>
+                    <span><small>Input torque</small><b>{(output.torqueNm * torqueTransfer).toFixed(0)} N·m</b></span>
                     <span><small>Output</small><b>{transmission.outputRpm.toFixed(0)} rpm</b></span>
                     <span><small>Output torque</small><b>{gearboxTorque.toFixed(0)} N·m</b></span>
                     <span><small>Converter slip</small><b>{transmission.converterSlipRpm.toFixed(0)} rpm</b></span>
                   </div>
-                  <p><strong>The gearbox keeps the engine in a useful rpm range.</strong> First gear turns the output slowly with a large torque multiplication. Fourth is near direct drive, so the same engine rotation produces more road speed with less multiplication.</p>
+                  <p><strong>An upshift changes two things, depending on what you hold constant.</strong> During the shift, road speed keeps the output and wheels turning nearly continuously, so gearbox-input RPM drops to match the taller ratio. Later, at the same gearbox-input RPM, that taller gear produces more output speed but less torque multiplication.</p>
                   <div className="gearbox-application-chart" aria-label="Teaching clutch application chart">
                     {GEAR_ROLES.map((item) => {
                       const application = TEACHING_GEAR_APPLICATIONS[item.gear]

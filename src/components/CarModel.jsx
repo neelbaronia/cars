@@ -1,6 +1,6 @@
-import { Edges, Line, RoundedBox } from '@react-three/drei'
+import { Edges, Line, RoundedBox, useTexture } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { PaintedBox, PartLabel } from './SceneKit.jsx'
 
@@ -35,10 +35,10 @@ const BODY_STATIONS = [
 ]
 
 const CABIN_STATIONS = [
-  { z: -1.02, halfWidth: 1.34, bottom: .68, top: .76 },
-  { z: -.36, halfWidth: 1.14, bottom: .7, top: 1.48 },
-  { z: .75, halfWidth: 1.13, bottom: .7, top: 1.49 },
-  { z: 1.38, halfWidth: 1.33, bottom: .67, top: .77 },
+  { z: -1.02, halfWidth: 1.34, bottom: .68, top: .81 },
+  { z: -.36, halfWidth: 1.14, bottom: .7, top: 1.69 },
+  { z: .75, halfWidth: 1.13, bottom: .7, top: 1.7 },
+  { z: 1.38, halfWidth: 1.33, bottom: .67, top: .82 },
 ]
 const FRONT_AXLE_Z = -2.05
 const REAR_AXLE_Z = 2.05
@@ -182,13 +182,13 @@ function BodyShell({ opacity = 1, panelOpacity = opacity, explode = 0 }) {
 
       <group position={[0, explode * 1.35, explode * .22]}>
         <LoftMesh stations={CABIN_STATIONS} color={COLORS.glass} opacity={glassOpacity} edge={COLORS.glassDark} renderOrder={1} />
-        <RoundedPiece size={[2.28, .13, 1.17]} position={[0, 1.49, .2]} color={COLORS.bodyDark} opacity={panelOpacity} radius={.1} />
+        <RoundedPiece size={[2.32, .13, 1.22]} position={[0, 1.7, .2]} color={COLORS.bodyDark} opacity={panelOpacity} radius={.1} />
         {[-1, 1].map((side) => (
           <group key={side}>
-            <Tube start={[side * 1.33, .71, -1]} end={[side * 1.14, 1.49, -.36]} color={COLORS.bodyDark} radius={.055} opacity={panelOpacity} />
-            <Tube start={[side * 1.14, 1.49, -.36]} end={[side * 1.13, 1.49, .75]} color={COLORS.bodyDark} radius={.055} opacity={panelOpacity} />
-            <Tube start={[side * 1.13, 1.49, .75]} end={[side * 1.33, .71, 1.36]} color={COLORS.bodyDark} radius={.055} opacity={panelOpacity} />
-            <Tube start={[side * 1.23, .72, .18]} end={[side * 1.16, 1.48, .18]} color={COLORS.bodyDark} radius={.05} opacity={panelOpacity} />
+            <Tube start={[side * 1.33, .71, -1]} end={[side * 1.14, 1.69, -.36]} color={COLORS.bodyDark} radius={.055} opacity={panelOpacity} />
+            <Tube start={[side * 1.14, 1.69, -.36]} end={[side * 1.13, 1.7, .75]} color={COLORS.bodyDark} radius={.055} opacity={panelOpacity} />
+            <Tube start={[side * 1.13, 1.7, .75]} end={[side * 1.33, .71, 1.36]} color={COLORS.bodyDark} radius={.055} opacity={panelOpacity} />
+            <Tube start={[side * 1.23, .72, .18]} end={[side * 1.16, 1.69, .18]} color={COLORS.bodyDark} radius={.05} opacity={panelOpacity} />
           </group>
         ))}
       </group>
@@ -241,6 +241,14 @@ function Seat({ x, z, opacity }) {
 }
 
 function GuyFieriDriver({ opacity = 1 }) {
+  const faceTextureSource = useTexture('/assets/guy-fieri-face.png')
+  const faceTexture = useMemo(() => {
+    const texture = faceTextureSource.clone()
+    texture.colorSpace = THREE.SRGBColorSpace
+    texture.needsUpdate = true
+    return texture
+  }, [faceTextureSource])
+  useEffect(() => () => faceTexture.dispose(), [faceTexture])
   const materialProps = {
     roughness: .78,
     transparent: opacity < 1,
@@ -248,16 +256,20 @@ function GuyFieriDriver({ opacity = 1 }) {
     depthWrite: opacity > .55,
   }
   const skin = '#d9a06f'
-  const hair = '#f4e5b4'
+  const hair = '#fff0b4'
   const beard = '#6a4936'
   const shirt = '#242b2d'
   const denim = '#46545b'
   const hairSpikes = [
-    { position: [-.57, 1.43, .08], rotation: [0, 0, 0] },
-    { position: [-.68, 1.405, .08], rotation: [0, 0, .5] },
-    { position: [-.46, 1.405, .08], rotation: [0, 0, -.5] },
-    { position: [-.57, 1.405, -.025], rotation: [-.48, 0, 0] },
-    { position: [-.57, 1.405, .185], rotation: [.48, 0, 0] },
+    { position: [-.57, 1.49, .08], rotation: [0, 0, 0] },
+    { position: [-.67, 1.465, .08], rotation: [0, 0, .4] },
+    { position: [-.47, 1.465, .08], rotation: [0, 0, -.4] },
+    { position: [-.74, 1.425, .08], rotation: [0, 0, .72] },
+    { position: [-.4, 1.425, .08], rotation: [0, 0, -.72] },
+    { position: [-.63, 1.45, -.015], rotation: [-.46, 0, .16] },
+    { position: [-.51, 1.45, -.015], rotation: [-.46, 0, -.16] },
+    { position: [-.63, 1.45, .175], rotation: [.46, 0, .16] },
+    { position: [-.51, 1.45, .175], rotation: [.46, 0, -.16] },
   ]
 
   return (
@@ -267,13 +279,17 @@ function GuyFieriDriver({ opacity = 1 }) {
       <RoundedPiece size={[.42, .45, .24]} position={[-.57, .96, .07]} rotation={[-.1, 0, 0]}
         color={shirt} opacity={opacity} radius={.1} />
 
+      <RoundedPiece size={[.12, .17, .026]} position={[-.66, 1.115, -.068]} rotation={[0, 0, -.48]}
+        color={COLORS.cream} opacity={opacity} radius={.018} />
+      <RoundedPiece size={[.12, .17, .026]} position={[-.48, 1.115, -.068]} rotation={[0, 0, .48]}
+        color={COLORS.cream} opacity={opacity} radius={.018} />
       {[
-        [-.68, .82, -.06, '#e6543f', -.18],
-        [-.57, .79, -.06, '#f2c348', 0],
-        [-.46, .83, -.06, '#e9872f', .18],
+        [-.7, .98, -.07, '#e6543f', -.22],
+        [-.57, .95, -.07, '#f2c348', 0],
+        [-.44, .99, -.07, '#e9872f', .22],
       ].map(([x, y, z, color, tilt]) => (
         <mesh key={`${x}-${color}`} position={[x, y, z]} rotation={[0, 0, tilt]}>
-          <coneGeometry args={[.055, .18, 5]} />
+          <coneGeometry args={[.075, .24, 5]} />
           <meshStandardMaterial color={color} emissive={color} emissiveIntensity={.08} {...materialProps} />
         </mesh>
       ))}
@@ -297,20 +313,26 @@ function GuyFieriDriver({ opacity = 1 }) {
         </group>
       ))}
 
-      <mesh position={[-.57, 1.29, .08]} castShadow={opacity > .55}>
-        <dodecahedronGeometry args={[.15, 1]} />
+      <mesh position={[-.57, 1.29, .08]} scale={[1.08, 1, .96]} castShadow={opacity > .55}>
+        <dodecahedronGeometry args={[.16, 1]} />
         <meshStandardMaterial color={skin} {...materialProps} />
       </mesh>
-      <mesh position={[-.57, 1.395, .095]} scale={[1, .48, 1]} castShadow={opacity > .55}>
-        <sphereGeometry args={[.154, 12, 7]} />
+      <mesh position={[-.57, 1.405, .095]} scale={[1.06, .52, 1]} castShadow={opacity > .55}>
+        <sphereGeometry args={[.165, 12, 7]} />
         <meshStandardMaterial color={hair} {...materialProps} />
       </mesh>
       {hairSpikes.map((spike, index) => (
         <mesh key={index} position={spike.position} rotation={spike.rotation} castShadow={opacity > .55}>
-          <coneGeometry args={[.047, .16, 5]} />
+          <coneGeometry args={[.058, .19, 5]} />
           <meshStandardMaterial color={hair} {...materialProps} />
         </mesh>
       ))}
+
+      <mesh position={[-.57, 1.3, -.098]} rotation={[0, Math.PI, 0]} renderOrder={5}>
+        <planeGeometry args={[.46, .46]} />
+        <meshBasicMaterial map={faceTexture} transparent opacity={opacity} alphaTest={.08}
+          depthWrite={opacity > .55} toneMapped={false} />
+      </mesh>
 
       {[-.645, -.495].map((x) => (
         <RoundedPiece key={x} size={[.13, .075, .026]} position={[x, 1.29, -.06]}

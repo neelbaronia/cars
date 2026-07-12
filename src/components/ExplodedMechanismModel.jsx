@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { TEACHING_GEAR_APPLICATIONS } from '../motionParts.js'
-import { FINAL_DRIVE_RATIO, INLINE_FOUR_CYLINDERS, activePowerCylinder, getGearRatio, sliderCrankPose } from '../physics.js'
+import { FINAL_DRIVE_RATIO, INLINE_FOUR_CYLINDERS, activePowerCylinder, getGearRatio, openDifferentialKinematics, sliderCrankPose } from '../physics.js'
 import { FlowDots, ForceArrow, PaintedBox } from './SceneKit.jsx'
 
 const COLORS = {
@@ -142,6 +142,34 @@ function RotatingDisc({ position, radius, depth = 0.14, color, speed = 1.5, axis
           <PaintedBox size={[depth + .03, .045, radius * 1.45]} color={COLORS.cream} opacity={opacity} />
         </group>
       )}
+    </group>
+  )
+}
+
+function WitnessRotor({ position, color, speed, opacity = 1, haloThickness = .032, haloOpacity = .7 }) {
+  const marker = useRef()
+  const reducedMotion = useContext(ReducedMotionContext)
+  useFrame((_, delta) => {
+    if (marker.current && !reducedMotion) marker.current.rotation.x -= delta * speed
+  })
+  return (
+    <group position={position}>
+      <group ref={marker}>
+        <mesh rotation={[0, 0, Math.PI / 2]} castShadow>
+          <cylinderGeometry args={[.52, .52, .08, 28]} />
+          <meshStandardMaterial color={color} roughness={.58} transparent opacity={opacity} />
+          <Edges color={COLORS.ink} />
+        </mesh>
+        <PaintedBox size={[.1, .4, .05]} position={[0, .2, 0]} color={COLORS.cream} opacity={opacity} />
+        <mesh position={[0, .43, 0]}>
+          <sphereGeometry args={[.06, 12, 9]} />
+          <meshStandardMaterial color={COLORS.cream} transparent opacity={opacity} />
+        </mesh>
+      </group>
+      <mesh rotation={[0, Math.PI / 2, 0]}>
+        <torusGeometry args={[.6, haloThickness, 10, 32]} />
+        <meshStandardMaterial color={COLORS.power} transparent opacity={haloOpacity} />
+      </mesh>
     </group>
   )
 }
@@ -595,6 +623,7 @@ function GearboxStudy({
   const selecting = stage.includes('select') || stage.includes('ratio') || stage.includes('match')
   const applying = stage.includes('apply') || (stage.includes('engage') && stage !== 'engaged')
   const releasing = stage.includes('release') || stage.includes('open')
+  const torqueCutting = stage.includes('cut') || stage.includes('unload')
   const displayGear = selecting || applying ? target : engaged
   const ratio = Math.abs(getGearRatio(displayGear))
   const safeTransfer = clamp01(torqueTransfer, stage === 'engaged' ? 1 : 0)
@@ -606,15 +635,20 @@ function GearboxStudy({
       : selecting ? 0
         : applying ? .25 + progress * .65
           : 1
-  const clutchPressurized = displayGear !== 0 && (selecting || applying || stage === 'engaged')
+  const clutchPressurized = displayGear !== 0 && (selecting || applying || torqueCutting || stage === 'engaged')
   const wheelRpm = Math.abs(Number(vehicleSpeed) || 0) / (2 * Math.PI * WHEEL_RADIUS) * 60
   const fallbackOutputRpm = wheelRpm * FINAL_DRIVE_RATIO
   const outputRpm = Number.isFinite(Number(gearboxOutputRpm)) ? Math.abs(Number(gearboxOutputRpm)) : fallbackOutputRpm
-  const inputRpm = Number.isFinite(Number(gearboxInputRpm))
-    ? Math.abs(Number(gearboxInputRpm))
-    : ratio * outputRpm
+  const reportedInputRpm = Number.isFinite(Number(gearboxInputRpm)) ? Math.abs(Number(gearboxInputRpm)) : 0
+  const inputRpm = displayGear !== 0 && reportedInputRpm < 1 && outputRpm > 0
+    ? ratio * outputRpm
+    : reportedInputRpm
   const inputSpeed = THREE.MathUtils.clamp(inputRpm / 720, -5.5, 5.5)
   const outputSpeed = THREE.MathUtils.clamp(outputRpm / 720, -5.5, 5.5)
+  const inputWitnessSpeed = THREE.MathUtils.clamp(inputRpm / 1440, 0, 5)
+  const outputWitnessSpeed = THREE.MathUtils.clamp(outputRpm / 1440, 0, 5)
+  const leverageScale = clamp01((ratio - 1) / (Math.abs(getGearRatio(1)) - 1))
+  const outputHaloThickness = .032 + leverageScale * .048
   const torqueFlowing = displayGear !== 0 && safeTransfer > .03
   const valveStatus = displayGear === 0 ? 'OPEN'
     : selecting ? `ROUTING ${applicationLabel}`
@@ -635,14 +669,19 @@ function GearboxStudy({
         <ClutchApplicationBank inputSpeed={inputSpeed} selectedCircuitIds={selectedCircuitIds}
           clampAmount={clutchClamp} pressurized={clutchPressurized} />
       </ExplodedPiece>
+      <ExplodedPiece from={[0, 0, 0]} to={[-.82, 0, 0]}>
+        <WitnessRotor position={[0, 0, 0]} color="#2f9a96" speed={inputWitnessSpeed} haloOpacity={.62} />
+        <Shaft start={[-.52, 0, 0]} end={[.48, 0, 0]} color={COLORS.powerDark} radius={.07} />
+      </ExplodedPiece>
       <ExplodedPiece from={[0, 0, 0]} to={[.05, 0, 0]}>
         <PlanetarySet inputSpeed={inputSpeed} outputSpeed={outputSpeed}
           selecting={selecting} torqueTransfer={safeTransfer} selectedGear={displayGear} />
       </ExplodedPiece>
       <ExplodedPiece from={[0, 0, 0]} to={[1.85, 0, 0]}>
-        <RotatingDisc position={[-.55, 0, 0]} radius={.78} depth={.13}
-          color={displayGear === 0 ? COLORS.metal : COLORS.burn} speed={outputSpeed}
-          opacity={.38 + safeTransfer * .62} />
+        <WitnessRotor position={[-.55, 0, 0]}
+          color={displayGear === 0 ? COLORS.metal : COLORS.burn} speed={outputWitnessSpeed}
+          opacity={.38 + safeTransfer * .62} haloThickness={outputHaloThickness}
+          haloOpacity={.1 + safeTransfer * .82} />
         <Shaft start={[-.45, 0, 0]} end={[1.15, 0, 0]} color={COLORS.powerDark} radius={.12} />
       </ExplodedPiece>
       {[1, 2, 3, 4].map((gearValue) => {
@@ -668,12 +707,12 @@ function GearboxStudy({
       <StudyLabel position={[-2.2, -.92, .08]} color="#a9443a" tooltipSide="above"
         className="gearbox-study-label gearbox-study-label--clutches"
         detail="A ratio is established by clamping a specific pair of friction elements. The selected plates close; unselected packs remain released. Exact clutch names vary by transmission.">
-        CLUTCH PACKS · {displayGear === 0 ? 'OPEN' : applicationLabel}
+        FRICTION ELEMENTS · {displayGear === 0 ? 'OPEN' : applicationLabel}
       </StudyLabel>
       <StudyLabel position={[.15, 1.25, 0]} color={COLORS.power}
         className="gearbox-study-label gearbox-study-label--planetary"
         detail="The four thin selector rings are a teaching map of the available ratio circuits, not four literal gears. The glowing ring is the selected circuit. Real automatics combine several planetary members according to a clutch application chart.">
-        PLANETARY SET · {displayGear === 0 ? 'OPEN' : `G${displayGear} · ${ratio.toFixed(2)}:1`}
+        PLANETARY SCHEMATIC · {displayGear === 0 ? 'OPEN' : `${selecting ? 'TARGET ' : ''}G${displayGear} · ${ratio.toFixed(2)}:1`}
       </StudyLabel>
     </group>
   )
@@ -728,41 +767,81 @@ function DriveshaftStudy({ speed }) {
   )
 }
 
-function DifferentialStudy({ speed }) {
+function DifferentialStudy({ speed, turnBias = 0 }) {
   const carrierAssembly = useRef()
+  const leftSideGear = useRef()
+  const rightSideGear = useRef()
+  const spiderCross = useRef()
+  const leftAxle = useRef()
+  const rightAxle = useRef()
   const reducedMotion = useContext(ReducedMotionContext)
-  const { wheel, propshaft } = drivelineSpeeds(speed)
+  const { wheel } = drivelineSpeeds(speed)
+  const visualDirection = speed < -0.05 ? -1 : 1
+  const carrierSpeed = Math.abs(wheel) > .2 ? wheel : visualDirection * 1.15
+  const differential = openDifferentialKinematics({ carrierSpeed, turnBias })
+  const pinionSpeed = THREE.MathUtils.clamp(carrierSpeed * FINAL_DRIVE_RATIO, -11, 11)
   useFrame((_, delta) => {
-    if (carrierAssembly.current && !reducedMotion) carrierAssembly.current.rotation.x -= delta * wheel
+    if (reducedMotion) return
+    if (carrierAssembly.current) carrierAssembly.current.rotation.x -= delta * differential.carrierSpeed
+    if (leftAxle.current) leftAxle.current.rotation.x -= delta * differential.leftSpeed
+    if (rightAxle.current) rightAxle.current.rotation.x -= delta * differential.rightSpeed
+    // The side gears live inside the rotating carrier, so these are relative
+    // rates. Their inherited carrier rotation supplies the common average.
+    if (leftSideGear.current) leftSideGear.current.rotation.x += delta * differential.speedSplit
+    if (rightSideGear.current) rightSideGear.current.rotation.x -= delta * differential.speedSplit
+    if (spiderCross.current) spiderCross.current.rotation.y += delta * differential.speedSplit
   })
   return (
     <group>
       <ExplodedPiece from={[0, 0, 0]} to={[0, 0, -1.65]}>
         <Shaft start={[0, 0, -1]} end={[0, 0, .65]} color={COLORS.power} radius={.12} />
-        <RotatingDisc position={[0, 0, .6]} radius={.38} depth={.22} color={COLORS.fuel} speed={propshaft} axis="z" />
+        <RotatingDisc position={[0, 0, .6]} radius={.38} depth={.22} color={COLORS.fuel} speed={pinionSpeed} axis="z" />
       </ExplodedPiece>
       <ExplodedPiece from={[0, 0, 0]} to={[0, 0, 0]}>
         <group ref={carrierAssembly}>
           <group rotation={[0, Math.PI / 2, 0]}><mesh><torusGeometry args={[1.1, .16, 12, 34]} /><meshStandardMaterial color={COLORS.power} /></mesh></group>
           <mesh><sphereGeometry args={[.72, 18, 12]} /><meshStandardMaterial color="#d8c8e8" transparent opacity={.28} /><Edges color={COLORS.powerDark} /></mesh>
-          <RotatingDisc position={[-.52, 0, 0]} radius={.36} depth={.15} color="#77bdd2" speed={0} />
-          <RotatingDisc position={[.52, 0, 0]} radius={.36} depth={.15} color="#77bdd2" speed={0} />
-          <RotatingDisc position={[0, .38, 0]} radius={.22} depth={.13} color={COLORS.fuel} speed={0} axis="z" />
-          <RotatingDisc position={[0, -.38, 0]} radius={.22} depth={.13} color={COLORS.fuel} speed={0} axis="z" />
+          <mesh position={[0, 1.1, 0]}><sphereGeometry args={[.08, 12, 9]} /><meshStandardMaterial color={COLORS.cream} /></mesh>
+          <group ref={leftSideGear} position={[-.52, 0, 0]}>
+            <RotatingDisc position={[0, 0, 0]} radius={.36} depth={.15} color="#77bdd2" speed={0} spokes={false} />
+            <PaintedBox size={[.14, .26, .05]} position={[0, .13, 0]} color={COLORS.ink} />
+            <mesh position={[0, .3, 0]}><sphereGeometry args={[.05, 10, 8]} /><meshStandardMaterial color={COLORS.cream} /></mesh>
+          </group>
+          <group ref={rightSideGear} position={[.52, 0, 0]}>
+            <RotatingDisc position={[0, 0, 0]} radius={.36} depth={.15} color="#e8a4b0" speed={0} spokes={false} />
+            <PaintedBox size={[.14, .26, .05]} position={[0, .13, 0]} color={COLORS.ink} />
+            <mesh position={[0, .3, 0]}><sphereGeometry args={[.05, 10, 8]} /><meshStandardMaterial color={COLORS.cream} /></mesh>
+          </group>
+          <group ref={spiderCross}>
+            <RotatingDisc position={[0, .38, 0]} radius={.22} depth={.13} color={COLORS.fuel} speed={0} axis="y" spokes={false} />
+            <RotatingDisc position={[0, -.38, 0]} radius={.22} depth={.13} color={COLORS.fuel} speed={0} axis="y" spokes={false} />
+            <PaintedBox size={[.44, .07, .07]} position={[.22, 0, 0]} color={COLORS.burn} />
+            <mesh position={[.45, 0, 0]}><sphereGeometry args={[.055, 10, 8]} /><meshStandardMaterial color={COLORS.cream} /></mesh>
+          </group>
         </group>
       </ExplodedPiece>
-      <ExplodedPiece from={[0, 0, 0]} to={[-1.45, 0, 0]}><Shaft start={[-1.3, 0, 0]} end={[.55, 0, 0]} color={COLORS.powerDark} radius={.11} /></ExplodedPiece>
-      <ExplodedPiece from={[0, 0, 0]} to={[1.45, 0, 0]}><Shaft start={[-.55, 0, 0]} end={[1.3, 0, 0]} color={COLORS.powerDark} radius={.11} /></ExplodedPiece>
-      <StudyLabel position={[0, 1.65, -.95]} color="#9b741b"
+      <ExplodedPiece from={[0, 0, 0]} to={[-1.45, 0, 0]}>
+        <group ref={leftAxle}>
+          <Shaft start={[-1.3, 0, 0]} end={[.55, 0, 0]} color={COLORS.powerDark} radius={.11} />
+          <PaintedBox size={[.14, .34, .05]} position={[-1.08, .17, 0]} color="#77bdd2" />
+          <mesh position={[-1.08, .36, 0]}><sphereGeometry args={[.06, 10, 8]} /><meshStandardMaterial color={COLORS.cream} /></mesh>
+        </group>
+      </ExplodedPiece>
+      <ExplodedPiece from={[0, 0, 0]} to={[1.45, 0, 0]}>
+        <group ref={rightAxle}>
+          <Shaft start={[-.55, 0, 0]} end={[1.3, 0, 0]} color={COLORS.powerDark} radius={.11} />
+          <PaintedBox size={[.14, .34, .05]} position={[1.08, .17, 0]} color="#e8a4b0" />
+          <mesh position={[1.08, .36, 0]}><sphereGeometry args={[.06, 10, 8]} /><meshStandardMaterial color={COLORS.cream} /></mesh>
+        </group>
+      </ExplodedPiece>
+      <StudyLabel position={[0, 1.65, -.95]} color="#9b741b" className="differential-study-label"
         detail="The small bevel pinion turns the larger ring gear through 90 degrees, reducing speed and multiplying torque.">DRIVE PINION</StudyLabel>
-      <StudyLabel position={[0, 1.45, 0]} color={COLORS.power}
+      <StudyLabel position={[.6, 1.45, 0]} color={COLORS.power} className="differential-study-label"
         detail="The ring gear is rigidly bolted to the carrier, so both rotate together at the final-drive output speed.">RING GEAR + CARRIER</StudyLabel>
-      <StudyLabel position={[0, -1.25, 0]} color="#9b741b"
-        detail="Permit left and right axle speeds to differ while an open differential delivers approximately equal torque to both sides.">SPIDER + SIDE GEARS</StudyLabel>
-      <StudyLabel position={[-2.25, .65, 0]} color={COLORS.powerDark}
-        detail="Carries torque from the left side gear to its wheel hub while rotating independently of the right axle.">LEFT AXLE</StudyLabel>
-      <StudyLabel position={[2.25, .65, 0]} color={COLORS.powerDark}
-        detail="Carries torque from the right side gear to its wheel hub while allowing a different cornering speed.">RIGHT AXLE</StudyLabel>
+      <StudyLabel position={[0, -1.25, 0]} color="#9b741b" className="differential-study-label"
+        detail="Walk around the side gears only when left and right axle speeds differ. Their motion keeps the carrier at the average of both axle speeds.">SPIDER + SIDE GEARS</StudyLabel>
+      <StudyLabel position={[2.25, .65, 0]} color={COLORS.powerDark} className="differential-study-label"
+        detail="Each axle carries torque from its side gear to one wheel. The vehicle-left and vehicle-right axles can turn at different speeds while their average still matches the carrier.">LEFT + RIGHT AXLES</StudyLabel>
     </group>
   )
 }
@@ -964,6 +1043,7 @@ export function ExplodedMechanismModel({
   roadForce,
   brake = 0,
   brakePressureBar,
+  differentialTurnBias = 0,
   onEnginePowerCylinder,
 }) {
   const reducedMotion = usePrefersReducedMotion()
@@ -983,7 +1063,7 @@ export function ExplodedMechanismModel({
     gearboxInputRpm={resolvedInputRpm} gearboxOutputRpm={resolvedOutputRpm}
     gearboxOutputTorque={resolvedGearboxTorque} wheelTorque={resolvedWheelTorque} vehicleSpeed={speed} />
   else if (partId === 'shaft') study = <DriveshaftStudy speed={speed} />
-  else if (partId === 'differential') study = <DifferentialStudy speed={speed} />
+  else if (partId === 'differential') study = <DifferentialStudy speed={speed} turnBias={differentialTurnBias} />
   else if (partId === 'brakes' || partId === 8 || partId === '8') study = <BrakeStudy brake={brake}
     brakePressureBar={brakePressureBar} speed={speed} />
   else study = <TiresStudy speed={speed} roadForce={roadForce} />

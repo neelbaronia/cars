@@ -37,7 +37,7 @@ export const MOTION_PARTS = [
   {
     id: 'differential', number: '06', short: 'DIFFERENTIAL', name: 'Final drive + differential + axles', color: '#65468b',
     summary: 'A final reduction multiplies torque again and sends it left and right.',
-    detail: 'The differential drives both axles while allowing the two wheels to rotate at different speeds in a corner. The axle shafts carry that torque to the wheel hubs.',
+    detail: 'The carrier turns at the average of the left and right axle speeds. Spider gears let one axle slow while the other speeds up by the same amount; an ideal open differential still supplies approximately equal torque to both sides, so one low-grip tire can limit both.',
     studyFlow: ['Pinion input', 'Ring + spider gears', 'Left and right axles'],
     internals: ['Drive pinion', 'Ring gear and final reduction', 'Carrier', 'Spider gears', 'Side gears', 'Axle shafts'],
   },
@@ -91,7 +91,7 @@ export const TEACHING_GEAR_APPLICATIONS = Object.freeze({
     gear: 4,
     circuits: Object.freeze([
       Object.freeze({ id: 'D', label: 'Direct clutch' }),
-      Object.freeze({ id: 'E', label: 'Overdrive brake' }),
+      Object.freeze({ id: 'E', label: 'Fourth-gear brake' }),
     ]),
     result: 'Near-direct ratio for cruise',
   }),

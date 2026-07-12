@@ -473,6 +473,27 @@ export function steeringOutput({ speed = 0, steeringDeg = 0, wheelbase = 2.7 } =
   return { turnRadius, yawRate }
 }
 
+/**
+ * Kinematics for a symmetric open differential. `carrierSpeed` can be any
+ * angular-speed unit (rpm, rad/s, or a normalized teaching rate) as long as
+ * the caller uses the returned values in the same unit. Positive turn bias is
+ * a left turn: the vehicle-left axle slows while the vehicle-right axle speeds
+ * up by the same amount. The carrier always remains their arithmetic mean.
+ */
+export function openDifferentialKinematics({ carrierSpeed = 0, turnBias = 0 } = {}) {
+  const safeCarrierSpeed = clamp(finiteNumber(carrierSpeed), -100_000, 100_000)
+  const safeTurnBias = clamp(finiteNumber(turnBias), -0.8, 0.8)
+  const speedSplit = safeCarrierSpeed * safeTurnBias
+
+  return {
+    carrierSpeed: safeCarrierSpeed,
+    leftSpeed: safeCarrierSpeed - speedSplit,
+    rightSpeed: safeCarrierSpeed + speedSplit,
+    speedSplit,
+    turnBias: safeTurnBias,
+  }
+}
+
 const normalizeAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle))
 
 /**

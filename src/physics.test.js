@@ -15,6 +15,7 @@ import {
   engineTorqueNm,
   gasolineMixtureOutput,
   getGearRatio,
+  openDifferentialKinematics,
   sliderCrankPose,
   steeringOutput,
   stepVehicle,
@@ -381,6 +382,40 @@ test('steering uses bicycle-model radius and speed-dependent yaw', () => {
   assert.ok(Math.abs(leftFast.yawRate + right.yawRate) < 1e-12)
 })
 
+test('an open differential keeps carrier speed at the axle-speed average', () => {
+  const straight = openDifferentialKinematics({ carrierSpeed: 200, turnBias: 0 })
+  const leftTurn = openDifferentialKinematics({ carrierSpeed: 200, turnBias: 0.3 })
+  const rightTurn = openDifferentialKinematics({ carrierSpeed: 200, turnBias: -0.3 })
+
+  assert.deepEqual(straight, {
+    carrierSpeed: 200,
+    leftSpeed: 200,
+    rightSpeed: 200,
+    speedSplit: 0,
+    turnBias: 0,
+  })
+  assert.equal(leftTurn.leftSpeed, 140)
+  assert.equal(leftTurn.rightSpeed, 260)
+  assert.equal((leftTurn.leftSpeed + leftTurn.rightSpeed) / 2, leftTurn.carrierSpeed)
+  assert.equal(rightTurn.leftSpeed, 260)
+  assert.equal(rightTurn.rightSpeed, 140)
+  assert.equal((rightTurn.leftSpeed + rightTurn.rightSpeed) / 2, rightTurn.carrierSpeed)
+})
+
+test('open differential kinematics clamps and sanitizes teaching inputs', () => {
+  const invalid = openDifferentialKinematics({
+    carrierSpeed: Number.NaN,
+    turnBias: Number.POSITIVE_INFINITY,
+  })
+  const clamped = openDifferentialKinematics({ carrierSpeed: 100, turnBias: 5 })
+
+  assertFiniteTree(invalid, 'openDifferentialKinematics.invalid')
+  assert.equal(invalid.carrierSpeed, 0)
+  assert.equal(invalid.turnBias, 0)
+  assert.equal(clamped.turnBias, 0.8)
+  assert.equal((clamped.leftSpeed + clamped.rightSpeed) / 2, 100)
+})
+
 test('stepVehicle accelerates, turns, and reports current subsystem outputs', () => {
   const initial = {
     speed: 0,
@@ -438,6 +473,10 @@ test('all public models sanitize non-finite simulator inputs', () => {
   assertFiniteTree(steeringOutput({
     speed: Number.NaN,
     steeringDeg: Number.POSITIVE_INFINITY,
+  }))
+  assertFiniteTree(openDifferentialKinematics({
+    carrierSpeed: Number.NaN,
+    turnBias: Number.POSITIVE_INFINITY,
   }))
   assertFiniteTree(stepVehicle({
     speed: Number.POSITIVE_INFINITY,

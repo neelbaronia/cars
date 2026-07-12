@@ -540,6 +540,17 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
 .motion-shift-phases span.is-active { border-color: var(--part-color); background: var(--part-color); color: white; }
 .motion-shift-phases b { width: 14px; height: 14px; display: grid; place-items: center; border-radius: 50%; background: #e9ddeb; color: #76569b; font-size: .38rem; }
 .motion-shift-deck.is-shifting { box-shadow: 5px 6px 0 rgba(233,164,176,.72); }
+.motion-differential-deck { position: absolute; z-index: 210; top: 126px; left: 20px; width: 292px; display: grid; gap: 8px; padding: 11px 12px; border: 1px solid color-mix(in srgb, var(--part-color) 62%, #b99d83); border-left: 5px solid var(--part-color); background: rgba(255,248,233,.97); box-shadow: 5px 6px 0 rgba(48,78,84,.18); }
+.motion-differential-deck > header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.motion-differential-deck > header span { color: var(--part-color); font: 700 .5rem 'DM Mono', monospace; letter-spacing: .06em; text-transform: uppercase; }
+.motion-differential-deck > header strong { color: #38545b; font: 700 .76rem 'Fraunces', serif; }
+.motion-differential-turns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.motion-differential-turns button { min-width: 0; padding: 7px 3px; border: 1px solid #c9b7a7; border-radius: 2px; background: #fffaf0; color: #6d6c69; cursor: pointer; font: 700 .44rem/1.25 'DM Mono', monospace; }
+.motion-differential-turns button:hover, .motion-differential-turns button:focus-visible { border-color: var(--part-color); color: var(--part-color); outline: none; }
+.motion-differential-turns button.is-active { border-color: var(--part-color); background: #eee4f2; box-shadow: inset 0 -3px 0 var(--part-color); color: var(--part-color); }
+.motion-differential-deck > p { min-height: 2.7em; margin: 0; color: #5f6b6c; font-size: .57rem; line-height: 1.42; }
+.motion-differential-deck > footer { display: flex; justify-content: space-between; gap: 8px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--part-color) 24%, #d8c8b7); color: #77716d; font: 600 .4rem/1.3 'DM Mono', monospace; text-transform: uppercase; }
+.motion-differential-deck > footer b { color: var(--part-color); font: inherit; }
 .drivetrain-hotspot { display: flex; align-items: center; gap: 5px; padding: 3px 7px 3px 3px; border: 1px solid color-mix(in srgb, var(--part-color) 70%, #75483f); border-radius: 3px; background: rgba(255,248,233,.95); box-shadow: 2px 3px 0 rgba(48,78,84,.2); color: #354f55; cursor: pointer; font: 700 8px 'DM Mono', monospace; white-space: nowrap; transition: transform .12s, box-shadow .12s, background .12s; }
 .drivetrain-hotspot span { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 2px; background: var(--part-color); color: white; }
 .drivetrain-hotspot b { font: inherit; letter-spacing: .025em; }
@@ -555,6 +566,47 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
 .motion-study-flow > b:last-child { border-right: 0; }
 .motion-study-flow em { min-width: 0; flex: 1; color: #38545b; font: normal 600 .54rem/1.35 'DM Mono', monospace; }
 .motion-study-flow i { color: #e6543f; font: normal 700 .8rem 'DM Mono', monospace; }
+.motion-differential-effect { position: absolute; z-index: 200; right: 20px; bottom: 20px; left: 20px; display: grid; border: 1px solid color-mix(in srgb, var(--part-color) 62%, #b99d83); background: rgba(255,248,233,.97); box-shadow: 4px 5px 0 rgba(48,78,84,.18); pointer-events: none; }
+.motion-differential-effect > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px; border-bottom: 1px solid color-mix(in srgb, var(--part-color) 28%, #d8c8b7); background: color-mix(in srgb, var(--part-color) 9%, #fffaf0); }
+.motion-differential-effect > header span { color: var(--part-color); font: 700 .48rem 'DM Mono', monospace; letter-spacing: .05em; text-transform: uppercase; }
+.motion-differential-effect > header strong { color: #667071; font: 600 .43rem 'DM Mono', monospace; }
+.motion-differential-readout { display: grid; grid-template-columns: 1fr 1.2fr 1fr; }
+.motion-differential-readout > span { min-width: 0; display: grid; gap: 2px; padding: 7px 10px; border-right: 1px solid rgba(105,91,80,.14); text-align: center; }
+.motion-differential-readout > span:last-child { border-right: 0; }
+.motion-differential-readout small { color: #77716d; font: 700 .4rem 'DM Mono', monospace; text-transform: uppercase; }
+.motion-differential-readout strong { color: #38545b; font: 700 .66rem 'DM Mono', monospace; }
+.motion-differential-readout b { color: #77716d; font: 600 .4rem/1.25 'DM Mono', monospace; text-transform: uppercase; }
+.motion-differential-readout .is-left strong { color: #2f8ea1; }
+.motion-differential-readout .is-carrier strong, .motion-differential-readout .is-carrier b { color: var(--part-color); }
+.motion-differential-readout .is-right strong { color: #d64f45; }
+.motion-differential-effect > footer { display: flex; justify-content: space-between; gap: 14px; padding: 5px 10px; border-top: 1px solid rgba(105,91,80,.13); color: #77716d; font: 500 .38rem/1.35 'DM Mono', monospace; }
+.motion-differential-effect > footer b { color: var(--part-color); font: 600 .38rem/1.35 'DM Mono', monospace; text-align: right; }
+.motion-gear-effect { position: absolute; z-index: 200; right: 20px; bottom: 20px; left: 20px; display: grid; border: 1px solid color-mix(in srgb, var(--part-color) 62%, #b99d83); background: rgba(255,248,233,.97); box-shadow: 4px 5px 0 rgba(48,78,84,.18); pointer-events: none; }
+.motion-gear-effect > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px; border-bottom: 1px solid color-mix(in srgb, var(--part-color) 28%, #d8c8b7); background: color-mix(in srgb, var(--part-color) 9%, #fffaf0); }
+.motion-gear-effect > header span { color: var(--part-color); font: 700 .48rem 'DM Mono', monospace; letter-spacing: .05em; text-transform: uppercase; }
+.motion-gear-effect > header strong { color: #38545b; font: 700 .56rem 'DM Mono', monospace; }
+.motion-gear-effect__live { display: flex; align-items: center; gap: 6px; }
+.motion-gear-effect__live > span { display: grid; grid-template-columns: auto auto; align-items: center; gap: 0 4px; color: #38545b; }
+.motion-gear-effect__live > span small { font: 600 .36rem 'DM Mono', monospace; text-transform: uppercase; }
+.motion-gear-effect__live > span strong { font: 700 .46rem 'DM Mono', monospace; }
+.motion-gear-effect__live > em { color: #8b8179; font: normal 600 .38rem 'DM Mono', monospace; text-transform: uppercase; }
+.motion-gear-effect__dial { grid-row: 1 / 3; position: relative; width: 19px; height: 19px; display: block; border: 3px solid currentColor; border-radius: 50%; animation: gear-witness-spin var(--spin-duration) linear infinite; }
+.motion-gear-effect__dial.is-input { color: #2f9a96; }
+.motion-gear-effect__dial.is-output { color: #e6543f; }
+.motion-gear-effect__dial.is-stopped { animation: none; }
+.motion-gear-effect__dial b { position: absolute; top: -3px; left: 50%; width: 3px; height: 9px; border-radius: 2px; background: #fffaf0; box-shadow: 0 0 0 1px currentColor; transform: translateX(-50%); }
+.motion-gear-effect__row { display: grid; grid-template-columns: 128px repeat(3, 1fr); border-bottom: 1px solid rgba(105,91,80,.13); }
+.motion-gear-effect__row > b, .motion-gear-effect__row > span { min-width: 0; display: grid; align-content: center; gap: 2px; padding: 6px 9px; border-right: 1px solid rgba(105,91,80,.13); }
+.motion-gear-effect__row > span:last-of-type { border-right: 0; }
+.motion-gear-effect__row > b { color: var(--part-color); font: 700 .5rem 'DM Mono', monospace; text-transform: uppercase; }
+.motion-gear-effect__row small { color: #77716d; font: 600 .39rem/1.25 'DM Mono', monospace; text-transform: uppercase; }
+.motion-gear-effect__row > span strong { color: #38545b; font: 700 .56rem/1.3 'DM Mono', monospace; }
+.motion-gear-effect__row > span:nth-of-type(1) strong { color: #2f9a96; }
+.motion-gear-effect__row > span:nth-of-type(2) strong { color: #e6543f; }
+.motion-gear-effect__row > span:nth-of-type(3) strong { color: var(--part-color); }
+.motion-gear-effect__row > p { display: none; }
+.motion-gear-effect > footer { padding: 4px 10px; color: #77716d; font: 500 .38rem 'DM Mono', monospace; text-align: right; }
+@keyframes gear-witness-spin { to { transform: rotate(360deg); } }
 
 .motion-lesson-pane { padding-top: 42px; }
 .motion-simple-controls { display: grid; gap: 18px; margin: 0 0 24px; padding: 20px 0; border-block: 1px solid #d8c8b7; }
@@ -597,7 +649,7 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
 .gearbox-live-lesson > header, .brake-live-lesson > header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .gearbox-live-lesson > header span, .brake-live-lesson > header span { color: var(--part-color); font: 700 .53rem 'DM Mono', monospace; letter-spacing: .05em; text-transform: uppercase; }
 .gearbox-live-lesson > header strong, .brake-live-lesson > header strong { color: #38545b; font: 700 .78rem 'Fraunces', serif; text-align: right; }
-.gearbox-live-readouts { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid color-mix(in srgb, var(--part-color) 30%, #d8c8b7); }
+.gearbox-live-readouts { display: grid; grid-template-columns: repeat(6, 1fr); border: 1px solid color-mix(in srgb, var(--part-color) 30%, #d8c8b7); }
 .gearbox-live-readouts span { min-width: 0; display: grid; gap: 3px; padding: 7px; border-right: 1px solid color-mix(in srgb, var(--part-color) 23%, #d8c8b7); }
 .gearbox-live-readouts span:last-child { border-right: 0; }
 .gearbox-live-readouts small { color: #7a7470; font: 600 .43rem/1.25 'DM Mono', monospace; text-transform: uppercase; }
@@ -756,8 +808,17 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
   .motion-study-flow { right: 12px; bottom: 12px; left: 12px; grid-template-columns: repeat(3, 1fr); }
   .motion-study-flow > span { display: none; }
   .motion-study-flow > b { padding: 7px 8px; }
+  .motion-differential-effect { right: 12px; bottom: 12px; left: 12px; }
+  .motion-gear-effect { right: 12px; bottom: 12px; left: 12px; }
+  .motion-gear-effect > header { padding: 5px 8px; }
+  .motion-gear-effect__row { grid-template-columns: 94px 1fr; }
+  .motion-gear-effect__row > span { display: none; }
+  .motion-gear-effect__row > b { border-right: 1px solid rgba(105,91,80,.13); }
+  .motion-gear-effect__row > p { display: grid; align-content: center; margin: 0; padding: 6px 8px; color: #38545b; font: 700 .49rem/1.35 'DM Mono', monospace; }
+  .motion-gear-effect > footer { display: none; }
   .motion-cylinder-summary { display: none; }
   .motion-shift-deck { top: 112px; left: 12px; width: min(282px, calc(100vw - 24px)); }
+  .motion-differential-deck { top: 112px; left: 12px; width: min(292px, calc(100vw - 24px)); }
   .gear-clutch-tag, .gear-valve-port, .gear-ratio-lane, .gearbox-study-label--valve { display: none; }
   .sim-command-trace { display: none; }
   .motion-lesson-pane .lesson-heading h1 { font-size: 1.72rem; }
@@ -805,10 +866,22 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
   .flow-chain > span { min-width: 50%; }
   .motion-scene-help { display: none; }
   .motion-shift-deck { right: 12px; width: auto; padding: 9px 10px; }
+  .motion-differential-deck { right: 12px; width: auto; padding: 9px 10px; }
+  .motion-differential-deck > p { font-size: .52rem; }
+  .motion-differential-deck > footer span { display: none; }
+  .motion-differential-effect > header { align-items: flex-start; flex-direction: column; gap: 2px; padding: 5px 7px; }
+  .motion-differential-readout > span { padding: 6px 4px; }
+  .motion-differential-readout small { font-size: .35rem; }
+  .motion-differential-readout strong { font-size: .53rem; }
+  .motion-differential-readout b { font-size: .33rem; }
+  .motion-differential-effect > footer { padding: 4px 7px; }
+  .motion-differential-effect > footer span { display: none; }
+  .motion-differential-effect > footer b { text-align: left; }
   .motion-shift-phases { display: none; }
   .motion-shift-deck > header strong { font-size: .66rem; }
   .motion-shift-gears i { display: none; }
   .gearbox-study-label { display: none; }
+  .differential-study-label { display: none; }
   .motion-selection-path > span > strong b { font-size: .35rem; }
   .motion-scene-inspector { top: 62px; width: 190px; padding: 9px 10px; }
   .motion-scene-inspector > strong { font-size: .72rem; }
@@ -827,6 +900,9 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
   .motion-study-toolbar > button { justify-self: start; }
   .motion-study-toolbar > div { justify-self: end; }
   .motion-study-flow em { font-size: .48rem; }
+  .motion-gear-effect > header { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .motion-gear-effect > header strong { font-size: .5rem; }
+  .motion-gear-effect__live { align-self: stretch; justify-content: space-between; }
   .motion-part-inspector { padding: 14px; }
   .cylinder-count-effects { grid-template-columns: 1fr; }
   .motion-internals ul { columns: 1; }
@@ -839,4 +915,5 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 2px s
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  .motion-gear-effect__dial { animation-play-state: paused !important; }
 }
